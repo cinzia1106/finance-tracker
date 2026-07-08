@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { MonthOverview } from '../../data/adapter';
 import { useAdapter } from '../../data/AdapterContext';
+import { useAppOutletContext } from '../../layout/AppLayout';
 import {
   BudgetBar,
   BudgetRow,
@@ -23,18 +24,27 @@ const GROUP_TONES = { fixed: 'apricot', variable: 'mocha', growth: 'mint' } as c
 
 export default function DashboardPage() {
   const adapter = useAdapter();
+  const { openQuickNote, dataVersion } = useAppOutletContext();
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
   const [data, setData] = useState<MonthOverview | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const now = new Date();
-    adapter.getMonthOverview(now.getFullYear(), now.getMonth() + 1).then((d) => {
+    adapter.getMonthOverview(year, month).then((d) => {
       if (!cancelled) setData(d);
     });
     return () => {
       cancelled = true;
     };
-  }, [adapter]);
+  }, [adapter, year, month, dataVersion]);
+
+  function shiftMonth(delta: number) {
+    const d = new Date(year, month - 1 + delta, 1);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth() + 1);
+  }
 
   if (!data) return null;
 
@@ -48,24 +58,24 @@ export default function DashboardPage() {
         <div className="page-header__lead">
           <h1 className="h1">
             <span className="desktop-only">
-              {data.year}年{data.month}月
+              {year}年{month}月
             </span>
-            <span className="mobile-only">{data.month}月</span>
+            <span className="mobile-only">{month}月</span>
           </h1>
-          <div className="month-switch desktop-only">
-            <button type="button" className="month-switch__btn">
+          <div className="month-switch">
+            <button type="button" className="month-switch__btn" onClick={() => shiftMonth(-1)}>
               ‹
             </button>
-            <button type="button" className="month-switch__btn" disabled>
+            <button type="button" className="month-switch__btn" onClick={() => shiftMonth(1)}>
               ›
             </button>
           </div>
-          <span className="caption desktop-only">上次匯入 {data.lastImportNote}</span>
-          <span className="caption mobile-only">
-            {data.year} · {data.phaseNote}
+          <span className="caption desktop-only">
+            {data.lastImportNote ? `上次匯入 ${data.lastImportNote}` : ''}
           </span>
+          <span className="caption mobile-only">{year}</span>
         </div>
-        <button type="button" className="btn btn--primary desktop-only">
+        <button type="button" className="btn btn--primary desktop-only" onClick={openQuickNote}>
           ＋ 快速手記
         </button>
         <span className="mobile-only">

@@ -1,11 +1,13 @@
 /* Responsive shell: ≥960px shows the 216px sidebar; below that the four
-   primary pages get a bottom nav + FAB, management pages a back header. */
+   primary pages get a bottom nav + FAB, management pages a back header.
+   Hosts the quick-note dialog; pages reach it via the Outlet context. */
 
-import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useAdapter } from '../data/AdapterContext';
 import { CountBadge } from '../components/ui';
+import QuickNoteDialog from '../components/QuickNoteDialog';
 
 const PRIMARY_NAV = [
   { to: '/', label: '總覽' },
@@ -22,11 +24,26 @@ const MANAGEMENT_NAV = [
   { to: '/settings', label: '設定' },
 ];
 
+/** Mobile FAB appears on 總覽/資產/明細 (design: not on 匯入). */
+const FAB_PATHS = new Set(['/', '/assets', '/transactions']);
+
+export interface AppOutletContext {
+  openQuickNote: () => void;
+  /** Bumped after a quick note is saved — pages refetch on change. */
+  dataVersion: number;
+}
+
+export function useAppOutletContext() {
+  return useOutletContext<AppOutletContext>();
+}
+
 export default function AppLayout() {
   const adapter = useAdapter();
   const { signOut } = useAuth();
   const location = useLocation();
   const [reviewCount, setReviewCount] = useState(0);
+  const [quickNoteOpen, setQuickNoteOpen] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,9 +53,12 @@ export default function AppLayout() {
     return () => {
       cancelled = true;
     };
-  }, [adapter]);
+  }, [adapter, dataVersion]);
+
+  const openQuickNote = useCallback(() => setQuickNoteOpen(true), []);
 
   const isPrimaryPage = PRIMARY_NAV.some((n) => n.to === location.pathname);
+  const showFab = FAB_PATHS.has(location.pathname);
 
   return (
     <div className="app-shell">
@@ -83,8 +103,14 @@ export default function AppLayout() {
       </nav>
 
       <main className="app-main">
-        <Outlet />
+        <Outlet context={{ openQuickNote, dataVersion } satisfies AppOutletContext} />
       </main>
+
+      {showFab && (
+        <button type="button" className="fab" aria-label="快速手記" onClick={openQuickNote}>
+          ＋
+        </button>
+      )}
 
       {isPrimaryPage && (
         <nav className="bottom-nav">
@@ -103,6 +129,12 @@ export default function AppLayout() {
           ))}
         </nav>
       )}
+
+      <QuickNoteDialog
+        open={quickNoteOpen}
+        onClose={() => setQuickNoteOpen(false)}
+        onSaved={() => setDataVersion((v) => v + 1)}
+      />
     </div>
   );
 }
