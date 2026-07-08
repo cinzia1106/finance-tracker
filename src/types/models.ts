@@ -8,6 +8,9 @@ export type TransactionSource = 'manual' | 'import';
 
 export interface Transaction {
   id: string;
+  accountId?: string;
+  toAccountId?: string | null;
+  importBatchId?: string | null;
   date: string; // YYYY-MM-DD
   type: TransactionType;
   amount: number; // TWD; refunds/reversals may be negative
@@ -18,17 +21,34 @@ export interface Transaction {
   tags: string[];
   status: TransactionStatus;
   source: TransactionSource;
+  rawPayload?: Record<string, unknown>;
   createdAt: string; // ISO 8601
+  updatedAt?: string;
+}
+
+export type ImportBatchStatus = 'uploaded' | 'processing' | 'completed' | 'failed';
+
+export interface ImportBatch {
+  id: string;
+  source: string;
+  status: ImportBatchStatus;
+  fileName?: string | null;
+  rowCount: number;
+  metadata: Record<string, unknown>;
+  createdAt: string;
   updatedAt?: string;
 }
 
 export type AccountType = 'cash' | 'bank' | 'credit_card' | 'virtual';
 
 export interface Account {
+  id?: string;
   name: string;
   type: AccountType;
   note?: string;
   active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type CategoryGroup = 'fixed' | 'variable' | 'growth' | 'other';

@@ -48,6 +48,14 @@
   font-weight: 700;
   color: var(--color-mint-deeper);
 }
+.sidebar__button {
+  margin-top: auto;
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
 .sidebar__group-label {
   padding: 20px 12px 8px 12px;
   font-size: var(--type-micro-size);
@@ -204,6 +212,26 @@
 .update-prompt__actions {
   display: inline-flex;
   gap: 8px;
+}
+
+.auth-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+}
+.auth-panel {
+  width: min(100%, 360px);
+  background: var(--color-card);
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.auth-error {
+  color: var(--color-apricot-deep);
 }
 
 @media (min-width: 960px) {

@@ -3,7 +3,18 @@
    will derive every value below from Transactions + Snapshots per
    spec-v2.1.md §5–§8 (localStorage/IndexedDB, CSV import). */
 
-import type { AccountType } from '../types/models';
+import type { Account, ImportBatch, Transaction, AccountType } from '../types/models';
+import type { SyncQueueStats } from '../sync/syncQueue';
+
+export type AccountDraft = Omit<Account, 'id' | 'createdAt' | 'updatedAt'> & {
+  id?: string;
+};
+export type TransactionDraft = Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'> & {
+  id?: string;
+};
+export type ImportBatchDraft = Omit<ImportBatch, 'id' | 'createdAt' | 'updatedAt'> & {
+  id?: string;
+};
 
 export interface ExpenseGroupSummary {
   key: 'fixed' | 'variable' | 'growth';
@@ -127,4 +138,25 @@ export interface DataAdapter {
   getMonthOverview(year: number, month: number): Promise<MonthOverview>;
   getAssetOverview(): Promise<AssetOverview>;
   getNeedsReviewCount(): Promise<number>;
+  listAccounts?(): Promise<Account[]>;
+  createAccount?(input: AccountDraft): Promise<Account>;
+  updateAccount?(id: string, input: Partial<Omit<Account, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Account>;
+  deleteAccount?(id: string): Promise<void>;
+  listTransactions?(year?: number, month?: number): Promise<Transaction[]>;
+  createTransaction?(input: TransactionDraft): Promise<Transaction>;
+  updateTransaction?(
+    id: string,
+    input: Partial<Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<Transaction>;
+  deleteTransaction?(id: string): Promise<void>;
+  createImportBatch?(input: ImportBatchDraft): Promise<ImportBatch>;
+  updateImportBatch?(
+    id: string,
+    input: Partial<Omit<ImportBatch, 'id' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<ImportBatch>;
+  listImportBatches?(): Promise<ImportBatch[]>;
+  rollbackImportBatch?(id: string): Promise<void>;
+  cacheImportedTransactions?(transactions: Transaction[]): Promise<void>;
+  flushPendingMutations?(): Promise<void>;
+  getSyncQueueStats?(): Promise<SyncQueueStats>;
 }

@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
 import { useAdapter } from '../data/AdapterContext';
 import { CountBadge } from '../components/ui';
 
@@ -26,6 +27,7 @@ const FAB_PATHS = new Set(['/', '/assets', '/transactions']);
 
 export default function AppLayout() {
   const adapter = useAdapter();
+  const { signOut } = useAuth();
   const location = useLocation();
   const [reviewCount, setReviewCount] = useState(0);
 
@@ -73,6 +75,15 @@ export default function AppLayout() {
             {item.withBadge && <CountBadge count={reviewCount} />}
           </NavLink>
         ))}
+        <button
+          type="button"
+          className="sidebar__item sidebar__button"
+          onClick={() => {
+            signOut().catch(() => undefined);
+          }}
+        >
+          <span>Sign out</span>
+        </button>
       </nav>
 
       <main className="app-main">
