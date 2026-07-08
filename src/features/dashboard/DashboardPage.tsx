@@ -252,6 +252,7 @@ export default function DashboardPage() {
 
         {/* 管理入口 — mobile only（設計：管理頁從總覽進入，底部導航固定 4 分頁） */}
         <section className="card row-list mobile-only">
+          <div className="micro dashboard__mgmt-label">管理</div>
           {[
             { to: '/inbox', label: '待確認', withBadge: true },
             { to: '/recurring', label: '固定支出' },

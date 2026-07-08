@@ -159,26 +159,6 @@
   background: var(--color-mint-deep);
 }
 
-.fab {
-  position: fixed;
-  right: var(--layout-mobile-pad-x);
-  bottom: calc(var(--layout-bottom-nav-height) + 20px);
-  width: var(--layout-fab-size);
-  height: var(--layout-fab-size);
-  border-radius: 50%;
-  border: none;
-  background: var(--color-mint);
-  color: var(--color-mint-deeper);
-  font-size: 26px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-fab);
-  cursor: pointer;
-  z-index: 21;
-}
-
 /* --- Mobile back header (management pages) --- */
 .back-header {
   display: flex;
@@ -295,8 +275,7 @@
 }
 
 @media (min-width: 960px) {
-  .bottom-nav,
-  .fab {
+  .bottom-nav {
     display: none;
   }
 }

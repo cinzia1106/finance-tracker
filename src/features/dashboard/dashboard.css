@@ -114,6 +114,9 @@
 }
 
 /* Mobile management entry rows */
+.dashboard__mgmt-label {
+  padding: 10px 0 6px 0;
+}
 .dashboard__mgmt-row {
   color: var(--color-ink);
 }

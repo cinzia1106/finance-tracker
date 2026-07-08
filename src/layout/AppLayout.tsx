@@ -22,9 +22,6 @@ const MANAGEMENT_NAV = [
   { to: '/settings', label: '設定' },
 ];
 
-/** Mobile FAB appears on 總覽/資產/明細 only (design: not on 匯入). */
-const FAB_PATHS = new Set(['/', '/assets', '/transactions']);
-
 export default function AppLayout() {
   const adapter = useAdapter();
   const { signOut } = useAuth();
@@ -42,7 +39,6 @@ export default function AppLayout() {
   }, [adapter]);
 
   const isPrimaryPage = PRIMARY_NAV.some((n) => n.to === location.pathname);
-  const showFab = FAB_PATHS.has(location.pathname);
 
   return (
     <div className="app-shell">
@@ -89,12 +85,6 @@ export default function AppLayout() {
       <main className="app-main">
         <Outlet />
       </main>
-
-      {showFab && (
-        <button type="button" className="fab" aria-label="快速手記">
-          ＋
-        </button>
-      )}
 
       {isPrimaryPage && (
         <nav className="bottom-nav">

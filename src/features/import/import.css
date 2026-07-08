@@ -182,7 +182,38 @@
     align-items: flex-start;
   }
   .import-batch-row {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
+    gap: 8px;
+  }
+  .import-batch-row__main {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      'date name'
+      'badge count';
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 6px;
+  }
+  .import-batch-row__main > span:last-child {
+    grid-area: count;
+    justify-self: start;
+  }
+  .import-batch-row__date {
+    grid-area: date;
+  }
+  .import-batch-row__name {
+    grid-area: name;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .import-batch-badge {
+    grid-area: badge;
+    justify-self: start;
+  }
+  .import-batch-row .btn {
+    align-self: flex-end;
   }
 }
