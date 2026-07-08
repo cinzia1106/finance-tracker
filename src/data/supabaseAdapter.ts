@@ -10,7 +10,7 @@ import type {
 } from './adapter';
 import { requireSupabase } from '../lib/supabaseClient';
 import type { Database, Json } from '../lib/supabaseTypes';
-import type { Account, ImportBatch, Transaction } from '../types/models';
+import type { Account, AssetSnapshot, ImportBatch, LiabilitySnapshot, Transaction } from '../types/models';
 
 type AccountRow = Database['public']['Tables']['accounts']['Row'];
 type AccountInsert = Database['public']['Tables']['accounts']['Insert'];
@@ -21,6 +21,8 @@ type TransactionUpdate = Database['public']['Tables']['transactions']['Update'];
 type ImportBatchRow = Database['public']['Tables']['import_batches']['Row'];
 type ImportBatchInsert = Database['public']['Tables']['import_batches']['Insert'];
 type ImportBatchUpdate = Database['public']['Tables']['import_batches']['Update'];
+type AssetSnapshotRow = Database['public']['Tables']['asset_snapshots']['Row'];
+type DebtSnapshotRow = Database['public']['Tables']['debt_snapshots']['Row'];
 type SyncEventInsert = Database['public']['Tables']['sync_events']['Insert'];
 type InboxTransaction = Transaction & { type: 'expense' | 'income' };
 
@@ -85,6 +87,35 @@ function mapImportBatch(row: ImportBatchRow): ImportBatch {
       : {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapAssetSnapshot(row: AssetSnapshotRow): AssetSnapshot {
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    date: row.date,
+    balance: row.balance,
+    costBasis: row.cost_basis,
+    marketValue: row.market_value,
+    dividendTotal: row.dividend_total,
+    source: row.source,
+    note: row.note ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapDebtSnapshot(row: DebtSnapshotRow): LiabilitySnapshot {
+  return {
+    id: row.id,
+    name: row.name,
+    date: row.date,
+    remainingBalance: row.remaining_balance,
+    monthlyPayment: row.monthly_payment ?? undefined,
+    nextDueDate: row.next_due_date ?? undefined,
+    source: row.source === 'import_derived' ? 'statement' : row.source,
+    note: row.note ?? undefined,
   };
 }
 
@@ -195,6 +226,34 @@ export class SupabaseDataAdapter implements DataAdapter {
     const { data, error } = await query;
     if (error) throw error;
     return data.map(mapTransaction);
+  }
+
+  async listAssetSnapshots(throughDate?: string): Promise<AssetSnapshot[]> {
+    await requireUserId();
+    const client = requireSupabase();
+    let query = client.from('asset_snapshots').select('*').order('date', { ascending: false });
+
+    if (throughDate) {
+      query = query.lte('date', throughDate);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data.map(mapAssetSnapshot);
+  }
+
+  async listDebtSnapshots(throughDate?: string): Promise<LiabilitySnapshot[]> {
+    await requireUserId();
+    const client = requireSupabase();
+    let query = client.from('debt_snapshots').select('*').order('date', { ascending: false });
+
+    if (throughDate) {
+      query = query.lte('date', throughDate);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data.map(mapDebtSnapshot);
   }
 
   async createTransaction(

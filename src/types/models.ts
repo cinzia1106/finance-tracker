@@ -111,3 +111,18 @@ export interface LiabilitySnapshot {
   source: 'manual_check' | 'statement';
   note?: string;
 }
+
+export interface AssetSnapshot {
+  id: string;
+  accountId?: string | null;
+  account?: string;
+  date: string;
+  balance: number;
+  costBasis?: number | null;
+  marketValue?: number | null;
+  dividendTotal?: number | null;
+  source: SnapshotSource;
+  note?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}

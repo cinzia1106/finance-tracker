@@ -80,6 +80,8 @@ export class SyncedDataAdapter implements DataAdapter {
   getAssetOverview = this.remote.getAssetOverview.bind(this.remote);
   getNeedsReviewCount = this.remote.getNeedsReviewCount.bind(this.remote);
   listAccounts = this.remote.listAccounts.bind(this.remote);
+  listAssetSnapshots = this.remote.listAssetSnapshots.bind(this.remote);
+  listDebtSnapshots = this.remote.listDebtSnapshots.bind(this.remote);
 
   async listTransactions(year?: number, month?: number): Promise<Transaction[]> {
     const [remoteTransactions, cachedTransactions] = await Promise.all([

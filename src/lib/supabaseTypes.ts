@@ -11,6 +11,7 @@ export type TransactionType = 'expense' | 'income' | 'transfer';
 export type TransactionStatus = 'confirmed' | 'needs_review';
 export type TransactionSource = 'manual' | 'import';
 export type ImportBatchStatus = 'uploaded' | 'processing' | 'completed' | 'failed';
+export type SnapshotSource = 'manual_check' | 'statement' | 'import_derived';
 
 export interface Database {
   public: {
@@ -165,6 +166,96 @@ export interface Database {
         };
         Relationships: [];
       };
+      asset_snapshots: {
+        Row: {
+          id: string;
+          user_id: string;
+          account_id: string | null;
+          date: string;
+          balance: number;
+          cost_basis: number | null;
+          market_value: number | null;
+          dividend_total: number | null;
+          source: SnapshotSource;
+          note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          account_id?: string | null;
+          date: string;
+          balance: number;
+          cost_basis?: number | null;
+          market_value?: number | null;
+          dividend_total?: number | null;
+          source: SnapshotSource;
+          note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          account_id?: string | null;
+          date?: string;
+          balance?: number;
+          cost_basis?: number | null;
+          market_value?: number | null;
+          dividend_total?: number | null;
+          source?: SnapshotSource;
+          note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      debt_snapshots: {
+        Row: {
+          id: string;
+          user_id: string;
+          account_id: string | null;
+          name: string;
+          date: string;
+          remaining_balance: number;
+          monthly_payment: number | null;
+          next_due_date: string | null;
+          source: SnapshotSource;
+          note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          account_id?: string | null;
+          name: string;
+          date: string;
+          remaining_balance: number;
+          monthly_payment?: number | null;
+          next_due_date?: string | null;
+          source: SnapshotSource;
+          note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          account_id?: string | null;
+          name?: string;
+          date?: string;
+          remaining_balance?: number;
+          monthly_payment?: number | null;
+          next_due_date?: string | null;
+          source?: SnapshotSource;
+          note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       sync_events: {
         Row: {
           id: string;
@@ -204,6 +295,7 @@ export interface Database {
       transaction_status: TransactionStatus;
       transaction_source: TransactionSource;
       import_batch_status: ImportBatchStatus;
+      snapshot_source: SnapshotSource;
     };
     CompositeTypes: Record<string, never>;
   };

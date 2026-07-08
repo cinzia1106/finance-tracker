@@ -3,7 +3,14 @@
    will derive every value below from Transactions + Snapshots per
    spec-v2.1.md §5–§8 (localStorage/IndexedDB, CSV import). */
 
-import type { Account, ImportBatch, Transaction, AccountType } from '../types/models';
+import type {
+  Account,
+  AssetSnapshot,
+  ImportBatch,
+  LiabilitySnapshot,
+  Transaction,
+  AccountType,
+} from '../types/models';
 import type { SyncQueueStats } from '../sync/syncQueue';
 
 export type AccountDraft = Omit<Account, 'id' | 'createdAt' | 'updatedAt'> & {
@@ -143,6 +150,8 @@ export interface DataAdapter {
   updateAccount?(id: string, input: Partial<Omit<Account, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Account>;
   deleteAccount?(id: string): Promise<void>;
   listTransactions?(year?: number, month?: number): Promise<Transaction[]>;
+  listAssetSnapshots?(throughDate?: string): Promise<AssetSnapshot[]>;
+  listDebtSnapshots?(throughDate?: string): Promise<LiabilitySnapshot[]>;
   createTransaction?(input: TransactionDraft): Promise<Transaction>;
   updateTransaction?(
     id: string,
