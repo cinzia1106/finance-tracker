@@ -1,7 +1,7 @@
 /* 月報 Monthly Review — visual layer only. All figures come from
    buildMonthlyReviewData; export handlers reuse monthlyExport as-is. */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CHART_PALETTE, DonutChart, EmptyState } from '../../components/ui';
 import { useAdapter } from '../../data/AdapterContext';
@@ -20,27 +20,62 @@ function groupLabel(group: string) {
   return '日常變動';
 }
 
-/** Donut + text legend for category proportions (display only). */
+/** Full-width donut with a floating hover tooltip (name / percent / amount)
+    and a chip legend for identification. Display only. */
 function CategoryDonut({ rows }: { rows: { category: string; amount: number }[] }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
   const positive = rows.filter((row) => row.amount > 0);
   const total = positive.reduce((sum, row) => sum + row.amount, 0);
   if (total <= 0) return <span className="caption">本月無資料</span>;
+
+  const active = hovered !== null ? positive[hovered] : null;
+
   return (
-    <div className="review-donut">
-      <DonutChart values={positive.map((row) => row.amount)} />
-      <div className="review-legend">
+    <div
+      ref={wrapRef}
+      className="review-donut"
+      onMouseMove={(event) => {
+        const rect = wrapRef.current?.getBoundingClientRect();
+        if (rect) setPos({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+      }}
+    >
+      <DonutChart
+        values={positive.map((row) => row.amount)}
+        hoveredIndex={hovered}
+        onHoverSegment={setHovered}
+      />
+      {active && (
+        <div
+          className="review-tooltip"
+          style={{ left: pos.x, top: pos.y }}
+          role="status"
+        >
+          <span className="review-tooltip__name">{active.category}</span>
+          <span className="mono review-tooltip__pct">
+            {Math.round((active.amount / total) * 100)}%
+          </span>
+          <span className="amount-s">{formatPlain(active.amount)}</span>
+        </div>
+      )}
+      <div className="review-chips">
         {positive.map((row, i) => (
-          <div key={row.category} className="review-legend__row">
+          <button
+            key={row.category}
+            type="button"
+            className={`review-chips__item${hovered === i ? ' review-chips__item--active' : ''}`}
+            onMouseEnter={() => setHovered(i)}
+            onMouseLeave={() => setHovered(null)}
+            onFocus={() => setHovered(i)}
+            onBlur={() => setHovered(null)}
+          >
             <span
               className="review-legend__chip"
               style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }}
             />
-            <span className="review-legend__name">{row.category}</span>
-            <span className="mono caption review-legend__pct">
-              {Math.round((row.amount / total) * 100)}%
-            </span>
-            <span className="amount-s">{formatPlain(row.amount)}</span>
-          </div>
+            {row.category}
+          </button>
         ))}
       </div>
     </div>
@@ -138,7 +173,14 @@ export default function MonthlyReviewPage() {
             {/* Row 1 — hero + category breakdowns */}
             <section className="card span-5">
               <div className="micro">本月淨現金流</div>
-              <div className="amount-xl">{formatCurrency(data.netCashFlow, true)}</div>
+              <div
+                className="amount-xl"
+                style={
+                  data.netCashFlow < 0 ? { color: 'var(--color-apricot-deep)' } : undefined
+                }
+              >
+                {formatCurrency(data.netCashFlow, true)}
+              </div>
               {/* Income vs expense comparison bars — shared scale = the larger side */}
               <div className="review-compare">
                 {(
@@ -173,14 +215,48 @@ export default function MonthlyReviewPage() {
                   {formatSigned(data.netCashFlowDelta)}
                 </span>
               </div>
-              <div className="review-groups">
-                {data.categoryGroups.map((row) => (
-                  <div key={row.group} className="review-groups__item">
-                    <span className="micro review-groups__label">{groupLabel(row.group)}</span>
-                    <span className="amount-s">{formatPlain(row.amount)}</span>
+              {/* Three-group proportional stacked bar (fixed / variable / growth) */}
+              {(() => {
+                const groups = data.categoryGroups.filter((row) => row.amount > 0);
+                const groupTotal = groups.reduce((sum, row) => sum + row.amount, 0);
+                if (groupTotal <= 0) return null;
+                const tone = (group: string) =>
+                  group === 'fixed'
+                    ? 'var(--color-apricot)'
+                    : group === 'self-investment'
+                      ? 'var(--color-mint-bar)'
+                      : 'var(--color-mocha)';
+                return (
+                  <div className="review-groupbar">
+                    <div className="review-groupbar__track">
+                      {groups.map((row) => (
+                        <div
+                          key={row.group}
+                          style={{
+                            width: `${((row.amount / groupTotal) * 100).toFixed(1)}%`,
+                            background: tone(row.group),
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div className="review-groupbar__legend">
+                      {groups.map((row) => (
+                        <span key={row.group} className="review-groupbar__item">
+                          <span
+                            className="review-legend__chip"
+                            style={{ background: tone(row.group) }}
+                          />
+                          <span className="caption">{groupLabel(row.group)}</span>
+                          <span className="amount-s">{formatPlain(row.amount)}</span>
+                          <span className="mono caption">
+                            {Math.round((row.amount / groupTotal) * 100)}%
+                          </span>
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })()}
             </section>
 
             <section className="card span-4">

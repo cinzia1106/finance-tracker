@@ -71,60 +71,93 @@
   text-align: right;
 }
 
-/* Donut + legend */
+/* Full-width donut + hover tooltip + chip legend */
 .review-donut {
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 14px;
-}
-.review-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  gap: 12px;
   width: 100%;
-}
-.review-legend__row {
-  display: grid;
-  grid-template-columns: 10px 1fr 40px 88px;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  padding: 4px 8px;
 }
 .review-legend__chip {
   width: 8px;
   height: 8px;
   border-radius: 2px;
+  flex-shrink: 0;
 }
-.review-legend__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.review-tooltip {
+  position: absolute;
+  transform: translate(12px, -110%);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 12px;
+  background: var(--color-card);
+  border: var(--border-hairline);
+  border-radius: var(--radius-badge);
+  box-shadow: var(--shadow-frame);
+  pointer-events: none;
   white-space: nowrap;
+  z-index: 5;
+  font-size: 13px;
 }
-.review-legend__pct {
-  text-align: right;
-  letter-spacing: 0;
+.review-tooltip__name {
+  font-weight: 700;
 }
-.review-legend__row .amount-s {
-  text-align: right;
+.review-tooltip__pct {
+  color: var(--color-ink-60);
+  font-size: 12px;
+}
+.review-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.review-chips__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-ink-70);
+  cursor: default;
+  border-radius: 6px;
+}
+.review-chips__item--active {
+  background: var(--color-panel);
+  color: var(--color-ink);
 }
 .review-note-label {
   letter-spacing: 0;
 }
-.review-groups {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+/* Three-group proportional stacked bar */
+.review-groupbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   border-top: var(--border-hairline-soft);
   padding-top: 10px;
 }
-.review-groups__item {
+.review-groupbar__track {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--color-bar-track);
 }
-.review-groups__label {
-  letter-spacing: 0;
+.review-groupbar__legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.review-groupbar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .review-note {
   line-height: 1.6;

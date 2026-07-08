@@ -22,34 +22,50 @@ export const CHART_PALETTE = [
   'var(--color-apricot-border)',
 ];
 
-/** Ring/donut proportion chart drawn with plain SVG strokes. */
+/** Ring/donut proportion chart drawn with plain SVG strokes.
+    Scales to its container width (fixed viewBox); optional hover callbacks
+    let the caller float a tooltip and highlight the active segment. */
 export function DonutChart({
   values,
-  size = 132,
-  thickness = 20,
+  thickness = 30,
+  hoveredIndex = null,
+  onHoverSegment,
 }: {
   values: number[];
-  size?: number;
   thickness?: number;
+  hoveredIndex?: number | null;
+  onHoverSegment?: (index: number | null) => void;
 }) {
+  const SIZE = 200;
   const total = values.reduce((sum, v) => sum + v, 0);
   if (total <= 0) return null;
-  const c = size / 2;
-  const r = (size - thickness) / 2;
+  const c = SIZE / 2;
+  const r = (SIZE - thickness - 8) / 2;
   let acc = 0;
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img">
+    <svg
+      viewBox={`0 0 ${SIZE} ${SIZE}`}
+      style={{ width: '100%', height: 'auto', display: 'block' }}
+      role="img"
+      onMouseLeave={() => onHoverSegment?.(null)}
+    >
       {values.map((v, i) => {
         const start = (acc / total) * 2 * Math.PI - Math.PI / 2;
         acc += v;
         const end = (acc / total) * 2 * Math.PI - Math.PI / 2;
         const frac = (end - start) / (2 * Math.PI);
         const color = CHART_PALETTE[i % CHART_PALETTE.length];
+        const width = hoveredIndex === i ? thickness + 8 : thickness;
+        const shared = {
+          fill: 'none',
+          stroke: color,
+          strokeWidth: width,
+          opacity: hoveredIndex === null || hoveredIndex === i ? 1 : 0.45,
+          onMouseEnter: () => onHoverSegment?.(i),
+        };
         if (frac <= 0) return null;
         if (frac >= 0.999) {
-          return (
-            <circle key={i} cx={c} cy={c} r={r} fill="none" stroke={color} strokeWidth={thickness} />
-          );
+          return <circle key={i} cx={c} cy={c} r={r} {...shared} />;
         }
         const x1 = c + r * Math.cos(start);
         const y1 = c + r * Math.sin(start);
@@ -60,9 +76,7 @@ export function DonutChart({
           <path
             key={i}
             d={`M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`}
-            fill="none"
-            stroke={color}
-            strokeWidth={thickness}
+            {...shared}
           />
         );
       })}
