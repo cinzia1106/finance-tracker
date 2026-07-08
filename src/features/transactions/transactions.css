@@ -54,6 +54,17 @@
   color: var(--color-ink-muted-row);
 }
 
+/* Narrow desktops: drop the tags column so note/account keep room. */
+@media (min-width: 960px) and (max-width: 1199px) {
+  .tx-col-tags {
+    display: none;
+  }
+  .tx-grid {
+    grid-template-columns: 48px 40px 64px minmax(200px, 1fr) 136px 96px 52px;
+    min-width: 660px;
+  }
+}
+
 @media (max-width: 959px) {
   .tx-search {
     max-width: none;

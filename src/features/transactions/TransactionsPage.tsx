@@ -168,7 +168,7 @@ export default function TransactionsPage() {
                 <span>類型</span>
                 <span>分類</span>
                 <span>備註</span>
-                <span>標籤</span>
+                <span className="tx-col-tags">標籤</span>
                 <span>帳戶</span>
                 <span className="cell-right">金額</span>
                 <span>狀態</span>
@@ -179,7 +179,7 @@ export default function TransactionsPage() {
                   <span>{tx.type === 'expense' ? '支出' : tx.type === 'income' ? '收入' : '轉帳'}</span>
                   <span>{tx.category || '—'}</span>
                   <span className="cell-ellipsis">{tx.note || '—'}</span>
-                  <span className="cell-ellipsis caption">
+                  <span className="cell-ellipsis caption tx-col-tags">
                     {tx.tags.length > 0 ? tx.tags.map((t) => `#${t}`).join(' ') : ''}
                   </span>
                   <span className="cell-ellipsis">
