@@ -22,6 +22,10 @@
 .tx-grid.data-table__row {
   padding: 7px 0;
 }
+/* Stronger separator where a new day group begins */
+.tx-row--day-start {
+  border-top: var(--border-hairline);
+}
 .tx-day-list {
   display: flex;
   flex-direction: column;

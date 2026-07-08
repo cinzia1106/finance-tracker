@@ -173,9 +173,17 @@ export default function TransactionsPage() {
                 <span className="cell-right">金額</span>
                 <span>狀態</span>
               </div>
-              {filtered.map((tx) => (
-                <div key={tx.id} className={`data-table__row tx-grid${rowStateClass(tx)}`}>
-                  <span className="mono caption">{tx.date.slice(5)}</span>
+              {filtered.map((tx, index) => {
+                // Ledger style: print the date once per day group
+                const dayStart = index === 0 || filtered[index - 1].date !== tx.date;
+                return (
+                <div
+                  key={tx.id}
+                  className={`data-table__row tx-grid${rowStateClass(tx)}${
+                    dayStart && index > 0 ? ' tx-row--day-start' : ''
+                  }`}
+                >
+                  <span className="mono caption">{dayStart ? tx.date.slice(5) : ''}</span>
                   <span>{tx.type === 'expense' ? '支出' : tx.type === 'income' ? '收入' : '轉帳'}</span>
                   <span>{tx.category || '—'}</span>
                   <span className="cell-ellipsis" title={tx.note || undefined}>
@@ -196,7 +204,8 @@ export default function TransactionsPage() {
                     <span className="status-text--confirmed">已確認</span>
                   )}
                 </div>
-              ))}
+                );
+              })}
               </div>
             </section>
 
