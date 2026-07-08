@@ -9,6 +9,67 @@ import {
   waterlineGeometry,
 } from '../lib/format';
 
+/** Muted category palette for proportional charts (pair with a text legend —
+    color is never the only encoding). */
+export const CHART_PALETTE = [
+  'var(--color-mint)',
+  'var(--color-mocha)',
+  'var(--color-apricot)',
+  'var(--color-mint-deep)',
+  'var(--color-apricot-strong)',
+  'var(--color-mint-border)',
+  'var(--color-ink-40)',
+  'var(--color-apricot-border)',
+];
+
+/** Ring/donut proportion chart drawn with plain SVG strokes. */
+export function DonutChart({
+  values,
+  size = 132,
+  thickness = 20,
+}: {
+  values: number[];
+  size?: number;
+  thickness?: number;
+}) {
+  const total = values.reduce((sum, v) => sum + v, 0);
+  if (total <= 0) return null;
+  const c = size / 2;
+  const r = (size - thickness) / 2;
+  let acc = 0;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img">
+      {values.map((v, i) => {
+        const start = (acc / total) * 2 * Math.PI - Math.PI / 2;
+        acc += v;
+        const end = (acc / total) * 2 * Math.PI - Math.PI / 2;
+        const frac = (end - start) / (2 * Math.PI);
+        const color = CHART_PALETTE[i % CHART_PALETTE.length];
+        if (frac <= 0) return null;
+        if (frac >= 0.999) {
+          return (
+            <circle key={i} cx={c} cy={c} r={r} fill="none" stroke={color} strokeWidth={thickness} />
+          );
+        }
+        const x1 = c + r * Math.cos(start);
+        const y1 = c + r * Math.sin(start);
+        const x2 = c + r * Math.cos(end);
+        const y2 = c + r * Math.sin(end);
+        const large = frac > 0.5 ? 1 : 0;
+        return (
+          <path
+            key={i}
+            d={`M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`}
+            fill="none"
+            stroke={color}
+            strokeWidth={thickness}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
 /** 2g empty state: white card, 48px icon block, H2, short caption, actions. */
 export function EmptyState({
   icon = '·',

@@ -33,6 +33,84 @@
   border-top: var(--border-hairline-soft);
   padding-top: 8px;
 }
+
+/* Income vs expense comparison bars (hero card) */
+.review-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.review-compare__row {
+  display: grid;
+  grid-template-columns: 32px 1fr 96px;
+  align-items: center;
+  gap: 12px;
+}
+.review-compare__label {
+  font-size: 13px;
+  color: var(--color-ink-70);
+}
+.review-compare__track {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--color-bar-track);
+  overflow: hidden;
+}
+.review-compare__fill {
+  height: 100%;
+  border-radius: inherit;
+}
+.review-compare__fill--income {
+  background: var(--color-mint);
+}
+.review-compare__fill--expense {
+  background: var(--color-mocha);
+}
+.review-compare__amount {
+  text-align: right;
+}
+
+/* Donut + legend */
+.review-donut {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.review-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.review-legend__row {
+  display: grid;
+  grid-template-columns: 10px 1fr 40px 88px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.review-legend__chip {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.review-legend__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-legend__pct {
+  text-align: right;
+  letter-spacing: 0;
+}
+.review-legend__row .amount-s {
+  text-align: right;
+}
+.review-note-label {
+  letter-spacing: 0;
+}
 .review-groups {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
