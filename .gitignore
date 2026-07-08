@@ -26,11 +26,15 @@ dist-ssr
 # Private financial data — must never be committed (spec-v2.1 §10.3)
 seed-data.private.json
 *.statement.csv
+*.statement.pdf
+*.bank.csv
 raw-imports/
 exports/private/
 
 # Environment files — only .env.example is committed
 .env
+.env.local
+.env.*.local
 .env.*
 !.env.example
 

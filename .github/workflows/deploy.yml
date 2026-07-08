@@ -33,9 +33,10 @@ jobs:
       - run: npm run build
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
-          # Phase B: provide these as repository variables when Supabase lands.
-          # VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          # VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          # Set as repository Variables (Settings → Secrets and variables →
+          # Actions → Variables). Publishable key only — never service role.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
       # SPA fallback: GitHub Pages serves 404.html for unknown paths, which
       # re-boots the app so client-side routes survive refresh/deep links.
