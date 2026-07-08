@@ -1,6 +1,6 @@
 /* 待確認 Inbox — visual layer. Lists needs_review transactions from the
-   existing adapter; "確認" uses the existing updateTransaction path
-   (status only), no new data rules. */
+   existing adapter; confirm (single or batch) reuses the existing
+   updateTransaction path (status only), no new data rules. */
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -14,7 +14,8 @@ export default function InboxPage() {
   const adapter = useAdapter();
   const [items, setItems] = useState<Transaction[] | null>(null);
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,22 +38,51 @@ export default function InboxPage() {
     [items, skipped],
   );
 
-  async function confirm(tx: Transaction) {
-    if (!adapter.updateTransaction) return;
-    setBusyId(tx.id);
+  async function confirmMany(ids: string[]) {
+    if (!adapter.updateTransaction || ids.length === 0) return;
+    setBusy(true);
     setError(null);
+    const done: string[] = [];
     try {
-      await adapter.updateTransaction(tx.id, { status: 'confirmed' });
-      setItems((prev) => (prev ?? []).filter((item) => item.id !== tx.id));
+      for (const id of ids) {
+        await adapter.updateTransaction(id, { status: 'confirmed' });
+        done.push(id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '確認失敗，請稍後再試。');
     } finally {
-      setBusyId(null);
+      setItems((prev) => (prev ?? []).filter((item) => !done.includes(item.id)));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        done.forEach((id) => next.delete(id));
+        return next;
+      });
+      setBusy(false);
     }
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected((prev) =>
+      prev.size === queue.length ? new Set() : new Set(queue.map((tx) => tx.id)),
+    );
   }
 
   function skip(tx: Transaction) {
     setSkipped((prev) => new Set(prev).add(tx.id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.delete(tx.id);
+      return next;
+    });
   }
 
   return (
@@ -71,6 +101,30 @@ export default function InboxPage() {
 
       {error && <div className="inbox-error caption">{error}</div>}
 
+      {selected.size > 0 && (
+        <div className="inbox-toolbar">
+          <span className="caption inbox-toolbar__count">已選 {selected.size} 筆</span>
+          <span className="inbox-toolbar__actions">
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              onClick={() => void confirmMany([...selected])}
+              disabled={busy}
+            >
+              標記為已確認
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={() => setSelected(new Set())}
+              disabled={busy}
+            >
+              取消選取
+            </button>
+          </span>
+        </div>
+      )}
+
       <div className="grid-12">
         {items === null ? (
           <section className="card span-12">
@@ -81,45 +135,64 @@ export default function InboxPage() {
             所有交易都已確認。匯入新的月結 CSV 後，需要人工判斷的交易會出現在這裡。
           </EmptyState>
         ) : (
-          queue.map((tx) => (
-            <section key={tx.id} className="card span-6 inbox-card">
-              <div className="inbox-card__meta caption">
-                <span className="mono">{tx.date}</span>
-                <span>{tx.toAccount ? `${tx.account} → ${tx.toAccount}` : tx.account}</span>
+          <section className="card span-12 inbox-list">
+            <div className="inbox-head caption">
+              <label className="inbox-check">
+                <input
+                  type="checkbox"
+                  checked={selected.size === queue.length && queue.length > 0}
+                  onChange={toggleAll}
+                />
+              </label>
+              <span>全選</span>
+            </div>
+            {queue.map((tx) => (
+              <div
+                key={tx.id}
+                className={`inbox-row${selected.has(tx.id) ? ' inbox-row--selected' : ''}`}
+              >
+                <label className="inbox-check">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(tx.id)}
+                    onChange={() => toggle(tx.id)}
+                  />
+                </label>
+                <span className="mono caption inbox-row__date">{tx.date}</span>
+                <span className="inbox-row__main">
+                  <span className="mono inbox-row__note">{tx.note || '（無備註）'}</span>
+                  <span className="caption">
+                    {tx.toAccount ? `${tx.account} → ${tx.toAccount}` : tx.account}
+                    {tx.tags.length > 0 && ` · ${tx.tags.map((t) => `#${t}`).join(' ')}`}
+                  </span>
+                </span>
+                <span className="chip inbox-row__chip">{tx.category || '其他'}</span>
+                <span className="amount-s inbox-row__amount">
+                  {tx.type === 'transfer'
+                    ? formatPlain(tx.amount)
+                    : formatSigned(tx.type === 'expense' ? -tx.amount : tx.amount)}
+                </span>
+                <span className="inbox-row__actions">
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--sm"
+                    onClick={() => void confirmMany([tx.id])}
+                    disabled={busy}
+                  >
+                    確認
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => skip(tx)}
+                    disabled={busy}
+                  >
+                    跳過
+                  </button>
+                </span>
               </div>
-              <div className="inbox-card__note mono">{tx.note || '（無備註）'}</div>
-              <div className="inbox-card__amount amount-l">
-                {tx.type === 'transfer'
-                  ? formatPlain(tx.amount)
-                  : formatSigned(tx.type === 'expense' ? -tx.amount : tx.amount)}
-              </div>
-              <div className="inbox-card__suggest">
-                <span className="caption">建議分類</span>
-                <span className="chip inbox-card__chip">{tx.category || '其他'}</span>
-                {tx.tags.length > 0 && (
-                  <span className="caption">{tx.tags.map((t) => `#${t}`).join(' ')}</span>
-                )}
-              </div>
-              <div className="inbox-card__actions">
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={() => void confirm(tx)}
-                  disabled={busyId === tx.id}
-                >
-                  接受建議並確認
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--secondary"
-                  onClick={() => skip(tx)}
-                  disabled={busyId === tx.id}
-                >
-                  跳過
-                </button>
-              </div>
-            </section>
-          ))
+            ))}
+          </section>
         )}
       </div>
     </>

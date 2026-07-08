@@ -114,6 +114,53 @@
 .import-batch-row {
   gap: var(--space-3);
 }
+.import-batch-row__main {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.import-batch-row__date {
+  letter-spacing: 0;
+  flex-shrink: 0;
+}
+.import-batch-row__name {
+  min-width: 0;
+}
+.import-batch-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: var(--type-micro-size);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.import-batch-badge--completed {
+  background: var(--color-mint-tint);
+  color: var(--color-mint-deep);
+}
+.import-batch-badge--uploaded,
+.import-batch-badge--processing {
+  background: var(--color-panel);
+  color: var(--color-ink-60);
+}
+.import-batch-badge--failed {
+  background: var(--color-apricot-tint);
+  color: var(--color-apricot-deep);
+}
+.import-stat--good .import-stat__value {
+  color: var(--color-mint-deep);
+}
+.import-stat--warn .import-stat__value {
+  color: var(--color-apricot-deep);
+}
+.import-stat--bad .import-stat__value {
+  color: var(--color-apricot-deep);
+}
+.import-stat--bad {
+  background: var(--color-apricot-tint);
+}
 .import-rules-note {
   line-height: 1.6;
   border-top: var(--border-hairline-soft);

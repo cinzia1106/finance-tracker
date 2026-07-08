@@ -169,6 +169,12 @@ p {
   color: var(--color-ink);
   font-weight: 500;
 }
+.btn--sm {
+  padding: 5px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 /* --- Bars --- */
 .budget-bar {

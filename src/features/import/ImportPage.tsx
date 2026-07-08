@@ -27,6 +27,13 @@ const STATUS_LABELS = {
   error: '錯誤',
 } as const;
 
+const BATCH_STATUS_LABELS: Record<ImportBatch['status'], string> = {
+  uploaded: '已上傳',
+  processing: '處理中',
+  completed: '已完成',
+  failed: '失敗',
+};
+
 function statusClass(status: ImportPreviewRow['status']) {
   return `import-status import-status--${status.replace('_', '-')}`;
 }
@@ -313,14 +320,21 @@ export default function ImportPage() {
             {batches.length === 0 && <div className="caption import-empty">尚無匯入紀錄</div>}
             {batches.map((batch) => (
               <div key={batch.id} className="list-row import-batch-row">
-                <span>
-                  <span className="mono">{batch.createdAt.slice(0, 10)}</span>{' '}
-                  {batch.fileName ?? batch.source}
-                  <span className="caption"> {batch.status} / {batch.rowCount}</span>
+                <span className="import-batch-row__main">
+                  <span className="mono caption import-batch-row__date">
+                    {batch.createdAt.slice(0, 10)}
+                  </span>
+                  <span className="import-batch-row__name cell-ellipsis">
+                    {batch.fileName ?? batch.source}
+                  </span>
+                  <span className={`import-batch-badge import-batch-badge--${batch.status}`}>
+                    {BATCH_STATUS_LABELS[batch.status]}
+                  </span>
+                  <span className="mono caption">{batch.rowCount} 列</span>
                 </span>
                 <button
                   type="button"
-                  className="btn btn--secondary"
+                  className="btn btn--secondary btn--sm"
                   onClick={() => void rollback(batch.id)}
                   disabled={busy}
                 >
@@ -336,18 +350,21 @@ export default function ImportPage() {
 }
 
 function PreviewSummary({ preview }: { preview: ImportPreview }) {
-  const stats = [
-    ['讀取', preview.summary.total],
-    ['新增', preview.summary.newCount],
-    ['重複略過', preview.summary.duplicateCount],
-    ['待確認', preview.summary.needsReviewCount],
-    ['欄位錯誤', preview.summary.errorCount],
+  const stats: [string, number, string][] = [
+    ['讀取', preview.summary.total, ''],
+    ['新增', preview.summary.newCount, 'good'],
+    ['重複略過', preview.summary.duplicateCount, ''],
+    ['待確認', preview.summary.needsReviewCount, 'warn'],
+    ['欄位錯誤', preview.summary.errorCount, 'bad'],
   ];
 
   return (
     <div className="row-list import-stats">
-      {stats.map(([label, value]) => (
-        <div key={label} className="list-row import-stat">
+      {stats.map(([label, value, tone]) => (
+        <div
+          key={label}
+          className={`list-row import-stat${tone && value > 0 ? ` import-stat--${tone}` : ''}`}
+        >
           <span className="micro">{label}</span>
           <span className="mono import-stat__value">{value}</span>
         </div>

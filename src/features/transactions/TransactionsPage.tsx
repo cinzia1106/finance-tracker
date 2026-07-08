@@ -162,6 +162,7 @@ export default function TransactionsPage() {
           <>
             {/* Desktop: dense table */}
             <section className="card span-12 desktop-only">
+              <div className="tx-table">
               <div className="data-table__head tx-grid">
                 <span>日期</span>
                 <span>類型</span>
@@ -194,6 +195,7 @@ export default function TransactionsPage() {
                   )}
                 </div>
               ))}
+              </div>
             </section>
 
             {/* Mobile: grouped by day */}

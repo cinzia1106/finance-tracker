@@ -1,42 +1,127 @@
-/* Inbox page specifics. */
+/* Inbox page specifics — dense review list with batch toolbar. */
 .inbox-error {
   padding: 10px 12px;
   border-radius: var(--radius-badge);
   background: var(--color-apricot-tint);
   color: var(--color-apricot-deep);
 }
-.inbox-card {
-  background: var(--color-apricot-row);
-  gap: 8px;
-}
-.inbox-card__meta {
+
+/* Batch toolbar (2c): mint tint bar above the list */
+.inbox-toolbar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-mint-tint);
+  border: 1px solid var(--color-mint-border);
 }
-.inbox-card__note {
-  font-size: 13px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--color-card);
-  border: var(--border-hairline-soft);
-  overflow-wrap: anywhere;
+.inbox-toolbar__count {
+  color: var(--color-mint-deeper);
 }
-.inbox-card__amount {
-  font-size: 20px;
+.inbox-toolbar__actions {
+  display: inline-flex;
+  gap: 8px;
 }
-.inbox-card__suggest {
+
+.inbox-list {
+  gap: 0;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.inbox-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  padding: 4px 0 8px 0;
+  border-bottom: var(--border-hairline);
 }
-.inbox-card__chip {
+.inbox-check {
+  display: inline-flex;
+  align-items: center;
+  width: 24px;
+  flex-shrink: 0;
+}
+.inbox-check input {
+  accent-color: var(--color-mint-deep);
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.inbox-row {
+  display: grid;
+  grid-template-columns: 24px 84px minmax(200px, 1fr) auto 104px auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: var(--border-hairline-soft);
+  background: var(--color-apricot-row);
+  margin: 0 -16px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.inbox-row:last-child {
+  border-bottom: none;
+}
+.inbox-row--selected {
+  background: var(--color-mint-tint);
+}
+.inbox-row__date {
+  letter-spacing: 0;
+}
+.inbox-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.inbox-row__note {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inbox-row__chip {
   cursor: default;
   background: var(--color-card);
+  white-space: nowrap;
 }
-.inbox-card__actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 2px;
+.inbox-row__amount {
+  text-align: right;
+}
+.inbox-row__actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+@media (max-width: 959px) {
+  .inbox-row {
+    grid-template-columns: 24px 1fr 96px;
+    grid-template-areas:
+      'check main amount'
+      'check meta actions';
+    row-gap: 6px;
+  }
+  .inbox-check {
+    grid-area: check;
+  }
+  .inbox-row__date {
+    display: none;
+  }
+  .inbox-row__main {
+    grid-area: main;
+  }
+  .inbox-row__chip {
+    grid-area: meta;
+    justify-self: start;
+  }
+  .inbox-row__amount {
+    grid-area: amount;
+  }
+  .inbox-row__actions {
+    grid-area: actions;
+    justify-self: end;
+  }
 }

@@ -113,11 +113,16 @@
   grid-template-columns: repeat(12, 1fr);
   gap: var(--layout-desktop-gap);
 }
+.span-2 { grid-column: span 2; }
 .span-3 { grid-column: span 3; }
 .span-4 { grid-column: span 4; }
 .span-5 { grid-column: span 5; }
 .span-6 { grid-column: span 6; }
+.span-7 { grid-column: span 7; }
 .span-8 { grid-column: span 8; }
+.span-9 { grid-column: span 9; }
+.span-10 { grid-column: span 10; }
+.span-12 { grid-column: span 12; }
 
 /* --- Mobile bottom nav + FAB --- */
 .bottom-nav {
@@ -243,12 +248,14 @@
   }
 }
 
-/* --- Responsive switches --- */
-.desktop-only {
-  display: initial;
-}
-.mobile-only {
-  display: none;
+/* --- Responsive switches ---
+   Hide-only rules: each viewport hides the other variant with !important
+   and never forces a display value, so feature CSS keeps control of the
+   visible variant's layout (flex/grid) regardless of load order. */
+@media (min-width: 960px) {
+  .mobile-only {
+    display: none !important;
+  }
 }
 
 @media (max-width: 959px) {
@@ -279,9 +286,6 @@
   }
   .desktop-only {
     display: none !important;
-  }
-  .mobile-only {
-    display: initial;
   }
 }
 

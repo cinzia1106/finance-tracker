@@ -12,8 +12,15 @@
   flex: 1;
   max-width: 320px;
 }
+.tx-table {
+  overflow-x: auto;
+}
 .tx-grid {
-  grid-template-columns: 52px 48px 72px minmax(160px, 1fr) 120px 150px 110px 64px;
+  grid-template-columns: 48px 40px 64px minmax(200px, 1fr) 96px 136px 96px 52px;
+  min-width: 780px;
+}
+.tx-grid.data-table__row {
+  padding: 7px 0;
 }
 .tx-day-list {
   display: flex;
