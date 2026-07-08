@@ -341,6 +341,37 @@ p {
   font-weight: 600;
 }
 
+/* --- Form grid (snapshot / settings forms) --- */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.form-field--wide {
+  grid-column: 1 / -1;
+}
+.form-field .text-input {
+  width: 100%;
+}
+.form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 959px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* --- Text input (search etc.) --- */
 .text-input {
   padding: 7px 12px;

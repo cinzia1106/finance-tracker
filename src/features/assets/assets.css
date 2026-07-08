@@ -157,6 +157,10 @@
   gap: var(--layout-desktop-gap);
 }
 
+.assets__empty-note {
+  padding: 9px 0;
+}
+
 .assets__invest-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
