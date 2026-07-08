@@ -33,6 +33,13 @@
   border-top: var(--border-hairline-soft);
   padding-top: 8px;
 }
+.review-export__files {
+  line-height: 1.6;
+}
+.review-export__files .mono {
+  font-size: 11px;
+  color: var(--color-ink-60);
+}
 
 /* Income vs expense comparison bars (hero card) */
 .review-compare {

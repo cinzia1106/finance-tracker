@@ -341,8 +341,14 @@ export default function MonthlyReviewPage() {
               <div>
                 <h2 className="h2">Export for Google Sheets</h2>
                 <span className="caption">
-                  月報 CSV 可直接匯入 Google Sheets；完整備份為所有可同步資料的 ZIP。
-                  檔名使用中性格式，不含個人資訊。
+                  月結時下載本月報表，直接匯入 Google Sheets 對帳與歸檔。
+                </span>
+                <span className="caption review-export__files">
+                  月報 CSV：
+                  <span className="mono">
+                    finance-tracker-monthly-review-{data.monthKey}.csv
+                  </span>
+                  ；備份 ZIP 內含摘要、交易、支出與收入分類四份 CSV。
                 </span>
               </div>
               <div className="review-actions">

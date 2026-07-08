@@ -178,7 +178,9 @@ export default function TransactionsPage() {
                   <span className="mono caption">{tx.date.slice(5)}</span>
                   <span>{tx.type === 'expense' ? '支出' : tx.type === 'income' ? '收入' : '轉帳'}</span>
                   <span>{tx.category || '—'}</span>
-                  <span className="cell-ellipsis">{tx.note || '—'}</span>
+                  <span className="cell-ellipsis" title={tx.note || undefined}>
+                    {tx.note || '—'}
+                  </span>
                   <span className="cell-ellipsis caption tx-col-tags">
                     {tx.tags.length > 0 ? tx.tags.map((t) => `#${t}`).join(' ') : ''}
                   </span>

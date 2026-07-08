@@ -83,9 +83,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.inbox-row__badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .inbox-row__chip {
   cursor: default;
   background: var(--color-card);
+  white-space: nowrap;
+}
+.inbox-row__status {
+  padding: 3px 10px;
   white-space: nowrap;
 }
 .inbox-row__amount {
@@ -113,7 +123,7 @@
   .inbox-row__main {
     grid-area: main;
   }
-  .inbox-row__chip {
+  .inbox-row__badges {
     grid-area: meta;
     justify-self: start;
   }

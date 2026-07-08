@@ -166,7 +166,13 @@ export default function InboxPage() {
                     {tx.tags.length > 0 && ` · ${tx.tags.map((t) => `#${t}`).join(' ')}`}
                   </span>
                 </span>
-                <span className="chip inbox-row__chip">{tx.category || '其他'}</span>
+                <span className="inbox-row__badges">
+                  <span className="chip inbox-row__chip">{tx.category || '其他'}</span>
+                  <span className="badge badge--review inbox-row__status">
+                    <span className="badge__dot" />
+                    待確認
+                  </span>
+                </span>
                 <span className="amount-s inbox-row__amount">
                   {tx.type === 'transfer'
                     ? formatPlain(tx.amount)
