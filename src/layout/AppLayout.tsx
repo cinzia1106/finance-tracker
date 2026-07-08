@@ -82,7 +82,7 @@ export default function AppLayout() {
             signOut().catch(() => undefined);
           }}
         >
-          <span>Sign out</span>
+          <span>登出</span>
         </button>
       </nav>
 

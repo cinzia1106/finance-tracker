@@ -1,5 +1,6 @@
-/* Small shared visual primitives shared by dashboard/assets pages. */
+/* Small shared visual primitives shared by feature pages. */
 
+import type { ReactNode } from 'react';
 import type { SafelineSummary } from '../data/adapter';
 import {
   BUDGET_WARNING_THRESHOLD,
@@ -7,6 +8,28 @@ import {
   formatPlain,
   waterlineGeometry,
 } from '../lib/format';
+
+/** 2g empty state: white card, 48px icon block, H2, short caption, actions. */
+export function EmptyState({
+  icon = '·',
+  title,
+  children,
+  actions,
+}: {
+  icon?: string;
+  title: string;
+  children?: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <section className="card empty-state span-12">
+      <div className="empty-state__icon">{icon}</div>
+      <h2 className="h2">{title}</h2>
+      {children && <p className="caption empty-state__text">{children}</p>}
+      {actions && <div className="empty-state__actions">{actions}</div>}
+    </section>
+  );
+}
 
 export function ReviewBadge({ count }: { count: number }) {
   if (count <= 0) return null;

@@ -21,10 +21,10 @@ declare global {
 }
 
 const STATUS_LABELS = {
-  new: 'New',
-  duplicate: 'Duplicate',
-  needs_review: 'Needs review',
-  error: 'Error',
+  new: '新增',
+  duplicate: '重複',
+  needs_review: '待確認',
+  error: '錯誤',
 } as const;
 
 function statusClass(status: ImportPreviewRow['status']) {
@@ -163,8 +163,8 @@ export default function ImportPage() {
     <>
       <header className="page-header">
         <div className="page-header__lead">
-          <h1 className="h1">Import</h1>
-          {fileName && <span className="caption">{fileName}</span>}
+          <h1 className="h1">匯入</h1>
+          {fileName && <span className="caption mono">{fileName}</span>}
         </div>
         <button
           type="button"
@@ -172,15 +172,15 @@ export default function ImportPage() {
           onClick={() => inputRef.current?.click()}
           disabled={busy}
         >
-          Select CSV
+          選擇 CSV
         </button>
       </header>
 
       <div className="grid-12">
-        <section className="card span-4">
+        <section className="card span-5">
           <div className="card__header">
-            <h2 className="h2">CSV Upload</h2>
-            <span className="micro import-card-note">cleaned file</span>
+            <h2 className="h2">上傳 CSV</h2>
+            <span className="micro import-card-note">清理後的標準格式</span>
           </div>
           <button
             type="button"
@@ -195,7 +195,7 @@ export default function ImportPage() {
             disabled={busy}
           >
             <span className="mono import-schema">date,type,amount,category,account,to_account,note</span>
-            <span className="caption">Drop CSV here or select file</span>
+            <span className="caption">拖放 CSV 到這裡，或點擊選擇檔案</span>
           </button>
           <input
             ref={inputRef}
@@ -208,18 +208,21 @@ export default function ImportPage() {
             }}
           />
           {error && <div className="import-error">{error}</div>}
+          <div className="caption import-rules-note">
+            重複列以去重鍵自動略過；欄位錯誤列不會入帳；不明轉入轉出與高額「其他」列會標記為待確認。
+          </div>
         </section>
 
-        <section className="card span-8">
+        <section className="card span-7">
           <div className="card__header">
-            <h2 className="h2">Validation Preview</h2>
+            <h2 className="h2">驗證預覽</h2>
             <button
               type="button"
               className="btn btn--primary"
               onClick={() => void confirmImport()}
               disabled={busy || rowsToImport.length === 0}
             >
-              Confirm Import
+              確認匯入
             </button>
           </div>
           {preview ? <PreviewSummary preview={preview} /> : <EmptyPreview />}
@@ -228,21 +231,21 @@ export default function ImportPage() {
         {preview && (
           <>
             <section className="card span-6">
-              <h2 className="h2">Monthly Summary</h2>
+              <h2 className="h2">每月摘要</h2>
               <div className="row-list">
                 {preview.summary.monthly.map((month) => (
                   <div key={month.month} className="list-row import-summary-row">
                     <span className="mono">{month.month}</span>
-                    <span>Expense {formatPlain(month.expense)}</span>
-                    <span>Income {formatPlain(month.income)}</span>
-                    <span>Transfer {formatPlain(month.transfer)}</span>
+                    <span>支出 {formatPlain(month.expense)}</span>
+                    <span>收入 {formatPlain(month.income)}</span>
+                    <span>轉帳 {formatPlain(month.transfer)}</span>
                   </div>
                 ))}
               </div>
             </section>
 
             <section className="card span-6">
-              <h2 className="h2">Category Summary</h2>
+              <h2 className="h2">分類摘要</h2>
               <div className="row-list">
                 {preview.summary.categories.map((category) => (
                   <div key={category.category} className="list-row">
@@ -254,16 +257,16 @@ export default function ImportPage() {
             </section>
 
             <section className="card span-12">
-              <h2 className="h2">Rows</h2>
+              <h2 className="h2">逐列結果</h2>
               <div className="import-table">
                 <div className="data-table__head import-table__grid">
-                  <span>Row</span>
-                  <span>Date</span>
-                  <span>Type</span>
-                  <span>Category</span>
-                  <span>Account</span>
-                  <span className="cell-right">Amount</span>
-                  <span>Status</span>
+                  <span>列</span>
+                  <span>日期</span>
+                  <span>類型</span>
+                  <span>分類</span>
+                  <span>帳戶</span>
+                  <span className="cell-right">金額</span>
+                  <span>狀態</span>
                 </div>
                 {preview.rows.map((row) => (
                   <div key={`${row.rowNumber}-${row.dedupeKey}`} className="data-table__row import-table__grid">
@@ -294,7 +297,7 @@ export default function ImportPage() {
 
         <section className="card span-12">
           <div className="card__header">
-            <h2 className="h2">Import Batches</h2>
+            <h2 className="h2">匯入紀錄</h2>
             <button
               type="button"
               className="btn btn--secondary"
@@ -303,11 +306,11 @@ export default function ImportPage() {
               }}
               disabled={busy}
             >
-              Refresh
+              重新整理
             </button>
           </div>
           <div className="row-list">
-            {batches.length === 0 && <div className="caption import-empty">No batches</div>}
+            {batches.length === 0 && <div className="caption import-empty">尚無匯入紀錄</div>}
             {batches.map((batch) => (
               <div key={batch.id} className="list-row import-batch-row">
                 <span>
@@ -321,7 +324,7 @@ export default function ImportPage() {
                   onClick={() => void rollback(batch.id)}
                   disabled={busy}
                 >
-                  Rollback
+                  回復此批次
                 </button>
               </div>
             ))}
@@ -334,11 +337,11 @@ export default function ImportPage() {
 
 function PreviewSummary({ preview }: { preview: ImportPreview }) {
   const stats = [
-    ['Total', preview.summary.total],
-    ['New', preview.summary.newCount],
-    ['Duplicate', preview.summary.duplicateCount],
-    ['Needs review', preview.summary.needsReviewCount],
-    ['Error', preview.summary.errorCount],
+    ['讀取', preview.summary.total],
+    ['新增', preview.summary.newCount],
+    ['重複略過', preview.summary.duplicateCount],
+    ['待確認', preview.summary.needsReviewCount],
+    ['欄位錯誤', preview.summary.errorCount],
   ];
 
   return (
@@ -356,7 +359,7 @@ function PreviewSummary({ preview }: { preview: ImportPreview }) {
 function EmptyPreview() {
   return (
     <div className="import-empty">
-      <span className="caption">No file selected</span>
+      <span className="caption">尚未選擇檔案。上傳後這裡會顯示讀取、新增、重複、待確認與錯誤筆數。</span>
     </div>
   );
 }

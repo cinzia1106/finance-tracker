@@ -233,6 +233,9 @@
 .auth-error {
   color: var(--color-apricot-deep);
 }
+.auth-note {
+  line-height: 1.6;
+}
 
 @media (min-width: 960px) {
   .update-prompt {

@@ -10,7 +10,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       <main className="auth-screen">
         <section className="auth-panel">
           <div className="micro">Finance Tracker</div>
-          <h1 className="h1">Loading session</h1>
+          <h1 className="h1">載入登入狀態…</h1>
         </section>
       </main>
     );
@@ -21,10 +21,10 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       <main className="auth-screen">
         <section className="auth-panel">
           <div className="micro">Finance Tracker</div>
-          <h1 className="h1">Supabase setup required</h1>
-          <p className="caption">
-            Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to the local
-            environment before using account data.
+          <h1 className="h1">尚未設定資料庫連線</h1>
+          <p className="caption auth-note">
+            請先在環境變數設定 VITE_SUPABASE_URL 與
+            VITE_SUPABASE_PUBLISHABLE_KEY，再重新載入。
           </p>
         </section>
       </main>
@@ -36,19 +36,19 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       <main className="auth-screen">
         <section className="auth-panel">
           <div className="micro">Finance Tracker</div>
-          <h1 className="h1">Sign in</h1>
-          <p className="caption">Google sign-in is required before any account data is loaded.</p>
+          <h1 className="h1">登入</h1>
+          <p className="caption auth-note">登入後才能讀取帳務資料；資料僅屬於你的帳號。</p>
           <button
             type="button"
             className="btn btn--primary"
             onClick={() => {
               setError(null);
               signInWithGoogle().catch((err: unknown) => {
-                setError(err instanceof Error ? err.message : 'Unable to start sign-in.');
+                setError(err instanceof Error ? err.message : '無法啟動登入流程。');
               });
             }}
           >
-            Continue with Google
+            使用 Google 登入
           </button>
           {error && <p className="caption auth-error">{error}</p>}
         </section>

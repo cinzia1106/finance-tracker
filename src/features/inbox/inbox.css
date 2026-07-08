@@ -1,0 +1,42 @@
+/* Inbox page specifics. */
+.inbox-error {
+  padding: 10px 12px;
+  border-radius: var(--radius-badge);
+  background: var(--color-apricot-tint);
+  color: var(--color-apricot-deep);
+}
+.inbox-card {
+  background: var(--color-apricot-row);
+  gap: 8px;
+}
+.inbox-card__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.inbox-card__note {
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--color-card);
+  border: var(--border-hairline-soft);
+  overflow-wrap: anywhere;
+}
+.inbox-card__amount {
+  font-size: 20px;
+}
+.inbox-card__suggest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.inbox-card__chip {
+  cursor: default;
+  background: var(--color-card);
+}
+.inbox-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}

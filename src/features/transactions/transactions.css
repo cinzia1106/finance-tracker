@@ -1,0 +1,55 @@
+/* Transactions page specifics. */
+.tx-totals {
+  letter-spacing: 0;
+}
+.tx-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.tx-search {
+  flex: 1;
+  max-width: 320px;
+}
+.tx-grid {
+  grid-template-columns: 52px 48px 72px minmax(160px, 1fr) 120px 150px 110px 64px;
+}
+.tx-day-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-mobile-gap);
+}
+.tx-day-header {
+  padding: 10px 0 4px 0;
+  font-family: var(--font-mono);
+}
+.tx-mobile-row {
+  gap: 12px;
+}
+.tx-mobile-row.data-table__row--review {
+  margin: 0 -16px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.tx-mobile-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tx-mobile-main > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tx-muted {
+  color: var(--color-ink-muted-row);
+}
+
+@media (max-width: 959px) {
+  .tx-search {
+    max-width: none;
+    width: 100%;
+  }
+}

@@ -114,6 +114,11 @@
 .import-batch-row {
   gap: var(--space-3);
 }
+.import-rules-note {
+  line-height: 1.6;
+  border-top: var(--border-hairline-soft);
+  padding-top: 10px;
+}
 
 @media (max-width: 959px) {
   .import-stats {
