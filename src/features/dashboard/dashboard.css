@@ -113,6 +113,23 @@
   font-weight: 600;
 }
 
+/* Mobile management entry rows */
+.dashboard__mgmt-row {
+  color: var(--color-ink);
+}
+.dashboard__mgmt-row:hover {
+  color: var(--color-ink);
+}
+.dashboard__mgmt-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.dashboard__mgmt-chevron {
+  color: var(--color-ink-40);
+  font-size: 15px;
+}
+
 /* Recent-transactions table columns (desktop) */
 .dashboard__tx-grid {
   grid-template-columns: 64px 72px 1fr 130px 110px 76px;

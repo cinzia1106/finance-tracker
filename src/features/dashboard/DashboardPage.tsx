@@ -250,6 +250,25 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        {/* 管理入口 — mobile only（設計：管理頁從總覽進入，底部導航固定 4 分頁） */}
+        <section className="card row-list mobile-only">
+          {[
+            { to: '/inbox', label: '待確認', withBadge: true },
+            { to: '/recurring', label: '固定支出' },
+            { to: '/investments', label: '投資' },
+            { to: '/monthly-review', label: '月報' },
+            { to: '/settings', label: '設定' },
+          ].map((item) => (
+            <Link key={item.to} to={item.to} className="list-row dashboard__mgmt-row">
+              <span>{item.label}</span>
+              <span className="dashboard__mgmt-meta">
+                {item.withBadge && <CountBadge count={data.needsReviewCount} />}
+                <span className="dashboard__mgmt-chevron">›</span>
+              </span>
+            </Link>
+          ))}
+        </section>
+
         {/* 最近交易 — desktop only */}
         <section className="card span-8 desktop-only">
           <div className="card__header">
