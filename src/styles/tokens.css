@@ -1,0 +1,95 @@
+/* Design tokens — single source: handoff design-tokens (spec bundle).
+   Do not restyle components with ad-hoc hex values; extend here instead. */
+:root {
+  /* Color */
+  --color-bg: #f9f5f0;
+  --color-card: #ffffff;
+  --color-ink: #373737;
+  --color-ink-60: #8a8177;
+  --color-ink-40: #b9ae9f;
+  --color-ink-muted-row: #a79c8e;
+  --color-hairline: #e7dfd4;
+  --color-hairline-soft: #f1eae0;
+  --color-bar-track: #efe8de;
+  --color-mocha: #b5a38f;
+  --color-mint: #b6d2c1;
+  --color-mint-deep: #5f8471;
+  --color-mint-deeper: #2f4a3d;
+  --color-income-text: #47695a;
+  --color-mint-tint: #e9f1ec;
+  --color-mint-border: #c9ded2;
+  --color-apricot: #f3b38c;
+  --color-apricot-strong: #e89b63;
+  --color-apricot-deep: #b06a38;
+  --color-apricot-deepest: #6b3f1d;
+  --color-apricot-tint: #faeee3;
+  --color-apricot-row: #fdf7f0;
+  --color-apricot-border: #ebc9ac;
+  --color-dot-orange: #d98d55;
+  --color-panel: #f5f0e8;
+  --color-row-hover: #fbf8f3;
+  --color-canvas-desk: #e9e4db;
+  /* Used throughout the 1a reference markup, not in the machine tokens */
+  --color-ink-70: #6f6a63;
+  --color-mint-bar: #9dbfac;
+
+  /* Font */
+  --font-ui: 'Noto Sans TC', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Type scale (px / weight) */
+  --type-amount-xl-size: 32px;
+  --type-amount-xl-weight: 600;
+  --type-amount-l-size: 22px;
+  --type-amount-l-weight: 600;
+  --type-amount-s-size: 14px;
+  --type-amount-s-weight: 500;
+  --type-h1-size: 22px;
+  --type-h1-weight: 700;
+  --type-h2-size: 15px;
+  --type-h2-weight: 700;
+  --type-body-size: 13px;
+  --type-caption-size: 12px;
+  --type-micro-size: 11px;
+  --type-micro-weight: 500;
+  --type-micro-tracking: 0.08em;
+
+  /* Space scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Radius */
+  --radius-badge: 8px;
+  --radius-control: 10px;
+  --radius-card: 12px;
+  --radius-frame-desktop: 16px;
+  --radius-frame-mobile: 20px;
+
+  /* Border / bars / chart */
+  --border-hairline: 1px solid var(--color-hairline);
+  --border-hairline-soft: 1px solid var(--color-hairline-soft);
+  --bar-budget-height: 6px;
+  --bar-waterline-height: 10px;
+  --chart-stroke-width: 1.5;
+  --chart-fill-opacity: 0.16;
+
+  /* Shadow — cards use none by rule */
+  --shadow-card: none;
+  --shadow-frame: 0 10px 30px rgba(55, 55, 55, 0.08);
+  --shadow-fab: 0 4px 12px rgba(95, 132, 113, 0.3);
+
+  /* Layout */
+  --layout-sidebar-width: 216px;
+  --layout-desktop-pad-y: 28px;
+  --layout-desktop-pad-x: 32px;
+  --layout-desktop-gap: 16px;
+  --layout-mobile-pad-y: 24px;
+  --layout-mobile-pad-x: 20px;
+  --layout-mobile-gap: 12px;
+  --layout-bottom-nav-height: 64px;
+  --layout-fab-size: 52px;
+}

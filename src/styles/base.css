@@ -1,0 +1,280 @@
+/* Base element styles and shared primitives (cards, badges, bars, tables). */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: var(--type-body-size);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-mint-deep);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--color-income-text);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+/* --- Typography helpers --- */
+.mono {
+  font-family: var(--font-mono);
+}
+.amount-xl {
+  font-family: var(--font-mono);
+  font-size: var(--type-amount-xl-size);
+  font-weight: var(--type-amount-xl-weight);
+  line-height: 1.1;
+}
+.amount-l {
+  font-family: var(--font-mono);
+  font-size: var(--type-amount-l-size);
+  font-weight: var(--type-amount-l-weight);
+}
+.amount-s {
+  font-family: var(--font-mono);
+  font-size: var(--type-amount-s-size);
+  font-weight: var(--type-amount-s-weight);
+}
+.h1 {
+  font-size: var(--type-h1-size);
+  font-weight: var(--type-h1-weight);
+  line-height: 1.2;
+}
+.h2 {
+  font-size: var(--type-h2-size);
+  font-weight: var(--type-h2-weight);
+}
+.caption {
+  font-size: var(--type-caption-size);
+  color: var(--color-ink-60);
+}
+.micro {
+  font-size: var(--type-micro-size);
+  font-weight: var(--type-micro-weight);
+  letter-spacing: var(--type-micro-tracking);
+  color: var(--color-ink-60);
+}
+.income {
+  color: var(--color-income-text);
+}
+.liability {
+  color: var(--color-apricot-deep);
+}
+
+/* --- Card --- */
+.card {
+  background: var(--color-card);
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+/* --- Badge --- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-badge);
+  font-size: var(--type-caption-size);
+  font-weight: 500;
+}
+.badge--review {
+  background: var(--color-apricot-tint);
+  color: var(--color-apricot-deep);
+}
+.badge--confirmed {
+  background: var(--color-mint-tint);
+  color: var(--color-income-text);
+}
+.badge--stale {
+  background: var(--color-bg);
+  border: var(--border-hairline);
+  color: var(--color-ink-60);
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: var(--type-micro-size);
+}
+.badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.badge--review .badge__dot {
+  background: var(--color-dot-orange);
+}
+.badge--confirmed .badge__dot {
+  background: var(--color-mint-deep);
+}
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--color-apricot-tint);
+  color: var(--color-apricot-deep);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* --- Buttons --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: var(--radius-control);
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn--primary {
+  background: var(--color-mint);
+  color: var(--color-mint-deeper);
+  font-weight: 700;
+}
+.btn--secondary {
+  background: var(--color-card);
+  border: var(--border-hairline);
+  color: var(--color-ink);
+  font-weight: 500;
+}
+
+/* --- Bars --- */
+.budget-bar {
+  height: var(--bar-budget-height);
+  border-radius: calc(var(--bar-budget-height) / 2);
+  background: var(--color-bar-track);
+  overflow: hidden;
+}
+.budget-bar__fill {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.waterline-bar {
+  position: relative;
+  height: var(--bar-waterline-height);
+  border-radius: calc(var(--bar-waterline-height) / 2);
+  background: var(--color-bar-track);
+}
+.waterline-bar__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-mint);
+}
+.waterline-bar__tick {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 16px;
+}
+.waterline-bar__tick--first {
+  background: var(--color-ink-60);
+}
+.waterline-bar__tick--comfort {
+  background: var(--color-ink);
+}
+
+/* --- Simple list rows inside cards --- */
+.row-list {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  border-top: var(--border-hairline-soft);
+  font-size: 13px;
+}
+.list-row:first-child {
+  border-top: none;
+}
+
+/* --- Data table (desktop) --- */
+.data-table__head,
+.data-table__row {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+}
+.data-table__head {
+  padding: 6px 0;
+  border-bottom: var(--border-hairline);
+  font-size: var(--type-micro-size);
+  font-weight: var(--type-micro-weight);
+  letter-spacing: 0.06em;
+  color: var(--color-ink-60);
+}
+.data-table__row {
+  padding: 9px 0;
+  border-bottom: var(--border-hairline-soft);
+  font-size: 13px;
+}
+.data-table__row:last-child {
+  border-bottom: none;
+}
+.data-table__row:hover {
+  background: var(--color-row-hover);
+}
+.data-table__row--review {
+  background: var(--color-apricot-row);
+}
+.data-table__row--muted {
+  color: var(--color-ink-muted-row);
+}
+.cell-right {
+  text-align: right;
+}
+.cell-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Status text in tables --- */
+.status-text--confirmed {
+  font-size: var(--type-micro-size);
+  color: var(--color-mint-deep);
+  font-weight: 500;
+}
+.status-text--review {
+  font-size: var(--type-micro-size);
+  color: var(--color-apricot-deep);
+  font-weight: 500;
+}
+.status-text--excluded {
+  font-size: var(--type-micro-size);
+}
