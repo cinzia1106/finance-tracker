@@ -10,6 +10,7 @@ import type {
   LiabilitySnapshot,
   Transaction,
   AccountType,
+  UserSettings,
 } from '../types/models';
 import type { SyncQueueStats } from '../sync/syncQueue';
 
@@ -21,6 +22,13 @@ export type TransactionDraft = Omit<Transaction, 'id' | 'createdAt' | 'updatedAt
 };
 export type ImportBatchDraft = Omit<ImportBatch, 'id' | 'createdAt' | 'updatedAt'> & {
   id?: string;
+};
+export type AssetSnapshotDraft = Omit<AssetSnapshot, 'id' | 'createdAt' | 'updatedAt'> & {
+  id?: string;
+};
+export type DebtSnapshotDraft = Omit<LiabilitySnapshot, 'id'> & {
+  id?: string;
+  accountId?: string | null;
 };
 
 export interface ExpenseGroupSummary {
@@ -152,6 +160,10 @@ export interface DataAdapter {
   listTransactions?(year?: number, month?: number): Promise<Transaction[]>;
   listAssetSnapshots?(throughDate?: string): Promise<AssetSnapshot[]>;
   listDebtSnapshots?(throughDate?: string): Promise<LiabilitySnapshot[]>;
+  createAssetSnapshot?(input: AssetSnapshotDraft): Promise<AssetSnapshot>;
+  createDebtSnapshot?(input: DebtSnapshotDraft): Promise<LiabilitySnapshot>;
+  getUserSettings?(): Promise<UserSettings>;
+  updateUserSettings?(input: Partial<UserSettings>): Promise<UserSettings>;
   createTransaction?(input: TransactionDraft): Promise<Transaction>;
   updateTransaction?(
     id: string,

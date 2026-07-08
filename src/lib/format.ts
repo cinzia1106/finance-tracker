@@ -48,7 +48,10 @@ export function waterlineGeometry(safeline: {
   comfortLine: number;
 }) {
   const scale = safeline.comfortLine * WATERLINE_SCALE_FACTOR;
-  const pct = (v: number) => `${Math.min((v / scale) * 100, 100).toFixed(0)}%`;
+  const pct = (v: number) => {
+    if (scale <= 0) return '0%';
+    return `${Math.min((v / scale) * 100, 100).toFixed(0)}%`;
+  };
   return {
     fill: pct(safeline.balance),
     firstTick: pct(safeline.firstLine),
@@ -56,6 +59,6 @@ export function waterlineGeometry(safeline: {
     firstLineMet: safeline.balance >= safeline.firstLine,
     comfortLineMet: safeline.balance >= safeline.comfortLine,
     comfortGap: Math.max(safeline.comfortLine - safeline.balance, 0),
-    comfortPct: Math.round((safeline.balance / safeline.comfortLine) * 100),
+    comfortPct: safeline.comfortLine > 0 ? Math.round((safeline.balance / safeline.comfortLine) * 100) : 0,
   };
 }

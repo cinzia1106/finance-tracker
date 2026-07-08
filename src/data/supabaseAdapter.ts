@@ -1,16 +1,17 @@
 import type {
-  AccountBalanceRow,
   AccountDraft,
+  AssetSnapshotDraft,
   AssetOverview,
   DataAdapter,
+  DebtSnapshotDraft,
   ImportBatchDraft,
   MonthOverview,
   TransactionDraft,
-  TransactionRow,
 } from './adapter';
+import { buildAssetOverview, buildMonthOverview } from './derivedValues';
 import { requireSupabase } from '../lib/supabaseClient';
 import type { Database, Json } from '../lib/supabaseTypes';
-import type { Account, AssetSnapshot, ImportBatch, LiabilitySnapshot, Transaction } from '../types/models';
+import type { Account, AssetSnapshot, ImportBatch, LiabilitySnapshot, Transaction, UserSettings } from '../types/models';
 
 type AccountRow = Database['public']['Tables']['accounts']['Row'];
 type AccountInsert = Database['public']['Tables']['accounts']['Insert'];
@@ -22,9 +23,11 @@ type ImportBatchRow = Database['public']['Tables']['import_batches']['Row'];
 type ImportBatchInsert = Database['public']['Tables']['import_batches']['Insert'];
 type ImportBatchUpdate = Database['public']['Tables']['import_batches']['Update'];
 type AssetSnapshotRow = Database['public']['Tables']['asset_snapshots']['Row'];
+type AssetSnapshotInsert = Database['public']['Tables']['asset_snapshots']['Insert'];
 type DebtSnapshotRow = Database['public']['Tables']['debt_snapshots']['Row'];
+type DebtSnapshotInsert = Database['public']['Tables']['debt_snapshots']['Insert'];
+type UserSettingsRow = Database['public']['Tables']['user_settings']['Row'];
 type SyncEventInsert = Database['public']['Tables']['sync_events']['Insert'];
-type InboxTransaction = Transaction & { type: 'expense' | 'income' };
 
 function monthDateRange(year: number, month: number) {
   const start = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -32,11 +35,6 @@ function monthDateRange(year: number, month: number) {
   const nextYear = month === 12 ? year + 1 : year;
   const end = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
   return { start, end };
-}
-
-function formatMonthDay(date: string) {
-  const [, month, day] = date.split('-');
-  return `${month}/${day}`;
 }
 
 function mapAccount(row: AccountRow): Account {
@@ -110,17 +108,28 @@ function mapDebtSnapshot(row: DebtSnapshotRow): LiabilitySnapshot {
   return {
     id: row.id,
     name: row.name,
+    accountId: row.account_id,
+    account: row.account_id ?? undefined,
     date: row.date,
     remainingBalance: row.remaining_balance,
     monthlyPayment: row.monthly_payment ?? undefined,
     nextDueDate: row.next_due_date ?? undefined,
-    source: row.source === 'import_derived' ? 'statement' : row.source,
+    source: row.source,
     note: row.note ?? undefined,
   };
 }
 
-function isInboxTransaction(tx: Transaction): tx is InboxTransaction {
-  return tx.status === 'needs_review' && (tx.type === 'expense' || tx.type === 'income');
+function mapUserSettings(row: UserSettingsRow): UserSettings {
+  return {
+    emergencyFundMonths: row.emergency_fund_months,
+  };
+}
+
+function isMissingUserSettings(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const message = 'message' in error ? String((error as { message?: unknown }).message ?? '') : '';
+  const code = 'code' in error ? String((error as { code?: unknown }).code ?? '') : '';
+  return code === '42P01' || /user_settings|schema cache|does not exist/i.test(message);
 }
 
 export async function requireUserId() {
@@ -130,27 +139,6 @@ export async function requireUserId() {
   const userId = data.session?.user.id;
   if (!userId) throw new Error('Sign in is required before reading user data.');
   return userId;
-}
-
-function emptySafeline() {
-  return {
-    balance: 0,
-    confirmedAt: '--',
-    firstLine: 0,
-    comfortLine: 0,
-  };
-}
-
-function emptyInvestment() {
-  return {
-    netInvested: 0,
-    marketValue: 0,
-    snapshotDate: '--',
-    unrealizedGain: 0,
-    unrealizedGainPct: 0,
-    monthlyBuy: 0,
-    dividendTotal: 0,
-  };
 }
 
 export class SupabaseDataAdapter implements DataAdapter {
@@ -256,6 +244,96 @@ export class SupabaseDataAdapter implements DataAdapter {
     return data.map(mapDebtSnapshot);
   }
 
+  async createAssetSnapshot(input: AssetSnapshotDraft): Promise<AssetSnapshot> {
+    const userId = await requireUserId();
+    const client = requireSupabase();
+    const insert: AssetSnapshotInsert = {
+      id: input.id,
+      user_id: userId,
+      account_id: input.accountId ?? null,
+      date: input.date,
+      balance: input.balance,
+      cost_basis: input.costBasis ?? null,
+      market_value: input.marketValue ?? null,
+      dividend_total: input.dividendTotal ?? null,
+      source: input.source,
+      note: input.note ?? null,
+    };
+    const { data, error } = await client
+      .from('asset_snapshots')
+      .insert(insert)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return mapAssetSnapshot(data);
+  }
+
+  async createDebtSnapshot(input: DebtSnapshotDraft): Promise<LiabilitySnapshot> {
+    const userId = await requireUserId();
+    const client = requireSupabase();
+    const insert: DebtSnapshotInsert = {
+      id: input.id,
+      user_id: userId,
+      account_id: input.accountId ?? input.account ?? null,
+      name: input.name,
+      date: input.date,
+      remaining_balance: input.remainingBalance,
+      monthly_payment: input.monthlyPayment ?? null,
+      next_due_date: input.nextDueDate ?? null,
+      source: input.source,
+      note: input.note ?? null,
+    };
+    const { data, error } = await client
+      .from('debt_snapshots')
+      .insert(insert)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return mapDebtSnapshot(data);
+  }
+
+  async getUserSettings(): Promise<UserSettings> {
+    const userId = await requireUserId();
+    const client = requireSupabase();
+    const { data, error } = await client
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) {
+      if (isMissingUserSettings(error)) return { emergencyFundMonths: 3 };
+      throw error;
+    }
+    if (data) return mapUserSettings(data);
+
+    const created = await client
+      .from('user_settings')
+      .insert({ user_id: userId })
+      .select('*')
+      .single();
+    if (created.error) throw created.error;
+    return mapUserSettings(created.data);
+  }
+
+  async updateUserSettings(input: Partial<UserSettings>): Promise<UserSettings> {
+    const userId = await requireUserId();
+    const client = requireSupabase();
+    const { data, error } = await client
+      .from('user_settings')
+      .upsert({
+        user_id: userId,
+        emergency_fund_months: input.emergencyFundMonths ?? 3,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return mapUserSettings(data);
+  }
+
   async createTransaction(
     input: TransactionDraft,
   ): Promise<Transaction> {
@@ -326,89 +404,47 @@ export class SupabaseDataAdapter implements DataAdapter {
   }
 
   async getMonthOverview(year: number, month: number): Promise<MonthOverview> {
-    const transactions = await this.listTransactions(year, month);
-    const income = transactions
-      .filter((tx) => tx.type === 'income')
-      .reduce((sum, tx) => sum + tx.amount, 0);
-    const expense = transactions
-      .filter((tx) => tx.type === 'expense')
-      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    const needsReviewCount = transactions.filter((tx) => tx.status === 'needs_review').length;
+    const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10);
+    const [transactions, allTransactions, accounts, assetSnapshots, debtSnapshots, importBatches, settings] =
+      await Promise.all([
+        this.listTransactions(year, month),
+        this.listTransactions(),
+        this.listAccounts(),
+        this.listAssetSnapshots(monthEnd),
+        this.listDebtSnapshots(monthEnd),
+        this.listImportBatches(),
+        this.getUserSettings(),
+      ]);
 
-    const recentTransactions: TransactionRow[] = transactions.slice(0, 5).map((tx) => ({
-      id: tx.id,
-      date: formatMonthDay(tx.date),
-      category: tx.category || 'Uncategorized',
-      note: tx.note,
-      tag: tx.tags[0],
-      account: tx.accountId ?? '',
-      amount: tx.type === 'expense' ? -Math.abs(tx.amount) : tx.amount,
-      type: tx.type,
-      status: tx.status,
-    }));
-
-    return {
+    return buildMonthOverview({
       year,
       month,
-      phaseNote: 'Supabase Foundation',
-      lastImportNote: null,
-      needsReviewCount,
-      income,
-      expense,
-      transferCount: transactions.filter((tx) => tx.type === 'transfer').length,
-      incomeBySource: [],
-      expenseGroups: [],
-      budgets: [],
-      creditCard: {
-        charged: 0,
-        due: 0,
-        dueDate: '--',
-        dueNote: '',
-        subscriptionCount: 0,
-        subscriptionTotal: 0,
-      },
-      safeline: emptySafeline(),
-      investment: emptyInvestment(),
-      inboxPreview: transactions
-        .filter(isInboxTransaction)
-        .slice(0, 2)
-        .map((tx) => ({
-          note: tx.note,
-          amount: Math.abs(tx.amount),
-          type: tx.type,
-        })),
-      recentTransactions,
-    };
+      transactions,
+      allTransactions,
+      accounts,
+      assetSnapshots,
+      debtSnapshots,
+      importBatches,
+      settings,
+    });
   }
 
   async getAssetOverview(): Promise<AssetOverview> {
-    const accounts = await this.listAccounts();
-    const accountRows: AccountBalanceRow[] = accounts.map((account) => ({
-      name: account.name,
-      detail: account.note,
-      accountType: account.type,
-      typeLabel: account.type,
-      balance: 0,
-      isLiability: account.type === 'credit_card',
-      confirmedAt: '--',
-      sourceLabel: '',
-      stale: !account.active,
-    }));
+    const [accounts, allTransactions, assetSnapshots, debtSnapshots, settings] = await Promise.all([
+      this.listAccounts(),
+      this.listTransactions(),
+      this.listAssetSnapshots(),
+      this.listDebtSnapshots(),
+      this.getUserSettings(),
+    ]);
 
-    return {
-      netWorth: 0,
-      netWorthDeltaFromLastMonth: 0,
-      cashAndBank: 0,
-      investmentValue: 0,
-      investmentSnapshotDate: '--',
-      liabilityTotal: 0,
-      disposableCash: 0,
-      netWorthHistory: [],
-      safeline: emptySafeline(),
-      accounts: accountRows,
-      liabilities: [],
-      investment: emptyInvestment(),
-    };
+    return buildAssetOverview({
+      accounts,
+      allTransactions,
+      assetSnapshots,
+      debtSnapshots,
+      settings,
+    });
   }
 
   async getNeedsReviewCount(): Promise<number> {

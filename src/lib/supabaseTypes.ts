@@ -211,6 +211,27 @@ export interface Database {
         };
         Relationships: [];
       };
+      user_settings: {
+        Row: {
+          user_id: string;
+          emergency_fund_months: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          emergency_fund_months?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          emergency_fund_months?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       debt_snapshots: {
         Row: {
           id: string;

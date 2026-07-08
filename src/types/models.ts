@@ -104,11 +104,12 @@ export interface LiabilitySnapshot {
   id: string;
   name: string;
   account?: string;
+  accountId?: string | null;
   date: string;
   remainingBalance: number;
   monthlyPayment?: number;
   nextDueDate?: string;
-  source: 'manual_check' | 'statement';
+  source: SnapshotSource;
   note?: string;
 }
 
@@ -125,4 +126,8 @@ export interface AssetSnapshot {
   note?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface UserSettings {
+  emergencyFundMonths: number;
 }

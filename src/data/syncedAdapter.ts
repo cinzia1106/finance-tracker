@@ -1,4 +1,9 @@
-import type { AccountDraft, DataAdapter, ImportBatchDraft, TransactionDraft } from './adapter';
+import type {
+  AccountDraft,
+  DataAdapter,
+  ImportBatchDraft,
+  TransactionDraft,
+} from './adapter';
 import { SupabaseDataAdapter, requireUserId } from './supabaseAdapter';
 import type { Account, ImportBatch, Transaction } from '../types/models';
 import {
@@ -82,6 +87,10 @@ export class SyncedDataAdapter implements DataAdapter {
   listAccounts = this.remote.listAccounts.bind(this.remote);
   listAssetSnapshots = this.remote.listAssetSnapshots.bind(this.remote);
   listDebtSnapshots = this.remote.listDebtSnapshots.bind(this.remote);
+  createAssetSnapshot = this.remote.createAssetSnapshot.bind(this.remote);
+  createDebtSnapshot = this.remote.createDebtSnapshot.bind(this.remote);
+  getUserSettings = this.remote.getUserSettings.bind(this.remote);
+  updateUserSettings = this.remote.updateUserSettings.bind(this.remote);
 
   async listTransactions(year?: number, month?: number): Promise<Transaction[]> {
     const [remoteTransactions, cachedTransactions] = await Promise.all([
