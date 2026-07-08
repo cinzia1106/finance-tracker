@@ -22,6 +22,18 @@ export const CHART_PALETTE = [
   'var(--color-apricot-border)',
 ];
 
+/** Readable on-segment text color for each CHART_PALETTE entry. */
+const CHART_LABEL_COLORS = [
+  'var(--color-mint-deeper)',
+  '#FFFFFF',
+  'var(--color-apricot-deepest)',
+  '#F9F5F0',
+  'var(--color-apricot-deepest)',
+  'var(--color-mint-deeper)',
+  '#FFFFFF',
+  'var(--color-apricot-deepest)',
+];
+
 /** Ring/donut proportion chart drawn with plain SVG strokes.
     Scales to its container width (fixed viewBox); optional hover callbacks
     let the caller float a tooltip and highlight the active segment. */
@@ -30,18 +42,30 @@ export function DonutChart({
   thickness = 30,
   hoveredIndex = null,
   onHoverSegment,
+  segmentLabels,
 }: {
   values: number[];
   thickness?: number;
   hoveredIndex?: number | null;
   onHoverSegment?: (index: number | null) => void;
+  /** When provided, segments wide enough get their name (and, if wider,
+      the value) written directly on the ring band. */
+  segmentLabels?: { title: string; value: string }[];
 }) {
   const SIZE = 200;
+  const NAME_MIN_FRAC = 0.07;
+  const VALUE_MIN_FRAC = 0.11;
   const total = values.reduce((sum, v) => sum + v, 0);
   if (total <= 0) return null;
   const c = SIZE / 2;
   const r = (SIZE - thickness - 8) / 2;
   let acc = 0;
+  const segments = values.map((v, i) => {
+    const start = (acc / total) * 2 * Math.PI - Math.PI / 2;
+    acc += v;
+    const end = (acc / total) * 2 * Math.PI - Math.PI / 2;
+    return { start, end, frac: (end - start) / (2 * Math.PI), i };
+  });
   return (
     <svg
       viewBox={`0 0 ${SIZE} ${SIZE}`}
@@ -49,11 +73,7 @@ export function DonutChart({
       role="img"
       onMouseLeave={() => onHoverSegment?.(null)}
     >
-      {values.map((v, i) => {
-        const start = (acc / total) * 2 * Math.PI - Math.PI / 2;
-        acc += v;
-        const end = (acc / total) * 2 * Math.PI - Math.PI / 2;
-        const frac = (end - start) / (2 * Math.PI);
+      {segments.map(({ start, end, frac, i }) => {
         const color = CHART_PALETTE[i % CHART_PALETTE.length];
         const width = hoveredIndex === i ? thickness + 8 : thickness;
         const shared = {
@@ -80,6 +100,45 @@ export function DonutChart({
           />
         );
       })}
+      {/* On-ring labels — drawn after all bands so they stay on top */}
+      {segmentLabels &&
+        segments.map(({ start, end, frac, i }) => {
+          if (frac < NAME_MIN_FRAC) return null;
+          const label = segmentLabels[i];
+          if (!label) return null;
+          const mid = (start + end) / 2;
+          const tx = c + r * Math.cos(mid);
+          const ty = c + r * Math.sin(mid);
+          const fill = CHART_LABEL_COLORS[i % CHART_LABEL_COLORS.length];
+          const showValue = frac >= VALUE_MIN_FRAC;
+          return (
+            <text
+              key={`label-${i}`}
+              x={tx.toFixed(1)}
+              y={ty.toFixed(1)}
+              textAnchor="middle"
+              fill={fill}
+              style={{ pointerEvents: 'none' }}
+            >
+              <tspan
+                x={tx.toFixed(1)}
+                dy={showValue ? '-0.15em' : '0.35em'}
+                style={{ fontFamily: 'var(--font-ui)', fontSize: 10, fontWeight: 500 }}
+              >
+                {label.title}
+              </tspan>
+              {showValue && (
+                <tspan
+                  x={tx.toFixed(1)}
+                  dy="1.1em"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 9 }}
+                >
+                  {label.value}
+                </tspan>
+              )}
+            </text>
+          );
+        })}
     </svg>
   );
 }

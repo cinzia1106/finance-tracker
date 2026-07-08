@@ -43,8 +43,13 @@ function CategoryDonut({ rows }: { rows: { category: string; amount: number }[] 
     >
       <DonutChart
         values={positive.map((row) => row.amount)}
+        thickness={48}
         hoveredIndex={hovered}
         onHoverSegment={setHovered}
+        segmentLabels={positive.map((row) => ({
+          title: row.category,
+          value: formatPlain(row.amount),
+        }))}
       />
       {active && (
         <div
@@ -171,7 +176,7 @@ export default function MonthlyReviewPage() {
             )}
 
             {/* Row 1 — hero + category breakdowns */}
-            <section className="card span-5">
+            <section className="card span-4">
               <div className="micro">本月淨現金流</div>
               <div
                 className="amount-xl"
@@ -257,6 +262,30 @@ export default function MonthlyReviewPage() {
                   </div>
                 );
               })()}
+              {/* Top expense categories keep the tall card informative */}
+              {(() => {
+                const top = data.expenseByCategory
+                  .filter((row) => row.amount > 0)
+                  .slice(0, 5);
+                const expenseTotal = data.expenseByCategory
+                  .filter((row) => row.amount > 0)
+                  .reduce((sum, row) => sum + row.amount, 0);
+                if (top.length === 0) return null;
+                return (
+                  <div className="review-top">
+                    <div className="micro review-top__label">主要支出</div>
+                    {top.map((row) => (
+                      <div key={row.category} className="review-top__row">
+                        <span>{row.category}</span>
+                        <span className="mono caption review-top__pct">
+                          {expenseTotal ? Math.round((row.amount / expenseTotal) * 100) : 0}%
+                        </span>
+                        <span className="amount-s">{formatPlain(row.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </section>
 
             <section className="card span-4">
@@ -267,7 +296,7 @@ export default function MonthlyReviewPage() {
               <CategoryDonut rows={data.expenseByCategory} />
             </section>
 
-            <section className="card span-3">
+            <section className="card span-4">
               <div className="card__header">
                 <h2 className="h2">收入來源</h2>
                 <span className="micro review-note-label">占比</span>

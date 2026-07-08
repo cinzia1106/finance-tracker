@@ -78,6 +78,33 @@
   text-align: right;
 }
 
+/* Top expense categories in the hero card */
+.review-top {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border-top: var(--border-hairline-soft);
+  padding-top: 10px;
+  margin-top: 2px;
+}
+.review-top__label {
+  padding-bottom: 2px;
+}
+.review-top__row {
+  display: grid;
+  grid-template-columns: 1fr 44px 96px;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.review-top__pct {
+  text-align: right;
+  letter-spacing: 0;
+}
+.review-top__row .amount-s {
+  text-align: right;
+}
+
 /* Full-width donut + hover tooltip + chip legend */
 .review-donut {
   position: relative;
