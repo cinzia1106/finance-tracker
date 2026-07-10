@@ -159,7 +159,11 @@ function buildInvestmentSummary(
     .filter((tx) => tx.date >= monthStart && tx.date < monthEnd)
     .reduce((total, tx) => total + Math.abs(tx.amount), 0);
   const dividendTotal = transactions
-    .filter((tx) => tx.type === 'income' && /股息|dividend/i.test(`${tx.category} ${tx.note}`))
+    .filter(
+      (tx) =>
+        tx.type === 'income' &&
+        (tx.category === '投資收益' || /股利|股息|配息|利息|dividend/i.test(`${tx.tags.join(' ')} ${tx.note}`)),
+    )
     .reduce((total, tx) => total + tx.amount, 0);
   const costBasis = costBasisFromSnapshots || netInvested;
   const unrealizedGain = marketValue - costBasis;
@@ -204,7 +208,9 @@ function buildCreditCardSummary(
     .reduce((total, tx) => total + tx.amount, 0);
   const latestDebt = latestByKey(debtSnapshots, (snapshot) => snapshot.account ?? snapshot.name)[0];
   const subscriptionRows = transactions.filter(
-    (tx) => tx.type === 'expense' && tx.category === '訂閱',
+    (tx) =>
+      tx.type === 'expense' &&
+      (tx.tags.some((tag) => tag.includes('訂閱')) || /訂閱|subscription/i.test(`${tx.category} ${tx.note}`)),
   );
 
   return {

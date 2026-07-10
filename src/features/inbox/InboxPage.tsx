@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAdapter } from '../../data/AdapterContext';
+import { CATEGORY_DEFINITIONS, tagsForCategory } from '../../data/categoryDefinitions';
 import type { Transaction } from '../../types/models';
 import { EmptyState } from '../../components/ui';
 import { formatPlain, formatSigned } from '../../lib/format';
@@ -17,6 +18,7 @@ export default function InboxPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +60,75 @@ export default function InboxPage() {
         return next;
       });
       setBusy(false);
+    }
+  }
+
+  function patchLocal(id: string, patch: Partial<Transaction>) {
+    setItems((prev) =>
+      (prev ?? []).map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+  }
+
+  function categoryOptions(tx: Transaction) {
+    const names = CATEGORY_DEFINITIONS.filter((category) => category.kind === tx.type).map(
+      (category) => category.name,
+    );
+    if (tx.category && !names.includes(tx.category)) names.unshift(tx.category);
+    return names;
+  }
+
+  function tagOptions(tx: Transaction) {
+    const current = tagsForCategory(tx.category);
+    if (current.length > 0) return current;
+    return [
+      ...new Set(
+        CATEGORY_DEFINITIONS.filter((category) => category.kind === tx.type).flatMap((category) =>
+          tagsForCategory(category.name),
+        ),
+      ),
+    ];
+  }
+
+  function categoryForTag(tx: Transaction, tag: string) {
+    if (tagsForCategory(tx.category).includes(tag)) return tx.category;
+    return (
+      CATEGORY_DEFINITIONS.find(
+        (category) => category.kind === tx.type && tagsForCategory(category.name).includes(tag),
+      )?.name ?? tx.category
+    );
+  }
+
+  async function changeCategory(tx: Transaction, category: string) {
+    if (!adapter.updateTransaction || category === tx.category) return;
+    setSavingId(tx.id);
+    setError(null);
+    try {
+      const validTags = new Set(tagsForCategory(category));
+      const nextTags = tx.tags.filter((tag) => validTags.has(tag));
+      await adapter.updateTransaction(tx.id, { category, tags: nextTags });
+      patchLocal(tx.id, { category, tags: nextTags });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '分類更新失敗。');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function toggleTag(tx: Transaction, tag: string) {
+    if (!adapter.updateTransaction) return;
+    const category = categoryForTag(tx, tag);
+    const tags = tx.tags.includes(tag)
+      ? tx.tags.filter((current) => current !== tag)
+      : [...tx.tags, tag];
+    setSavingId(tx.id);
+    setError(null);
+    try {
+      await adapter.updateTransaction(tx.id, { category, tags });
+      patchLocal(tx.id, { category, tags });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '標籤更新失敗。');
+    } finally {
+      setSavingId(null);
     }
   }
 
@@ -167,7 +238,34 @@ export default function InboxPage() {
                   </span>
                 </span>
                 <span className="inbox-row__badges">
-                  <span className="chip inbox-row__chip">{tx.category || '其他'}</span>
+                  <select
+                    className="text-input inbox-row__category"
+                    value={tx.category}
+                    disabled={busy || savingId === tx.id}
+                    onChange={(event) => void changeCategory(tx, event.target.value)}
+                    aria-label="分類"
+                  >
+                    {categoryOptions(tx).map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                  {tagOptions(tx).length > 0 && (
+                    <span className="inbox-row__tags">
+                      {tagOptions(tx).map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          className={`inbox-tag${tx.tags.includes(tag) ? ' inbox-tag--on' : ''}`}
+                          disabled={busy || savingId === tx.id}
+                          onClick={() => void toggleTag(tx, tag)}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </span>
+                  )}
                   <span className="badge badge--review inbox-row__status">
                     <span className="badge__dot" />
                     待確認
@@ -183,7 +281,7 @@ export default function InboxPage() {
                     type="button"
                     className="btn btn--primary btn--sm"
                     onClick={() => void confirmMany([tx.id])}
-                    disabled={busy}
+                    disabled={busy || savingId === tx.id}
                   >
                     確認
                   </button>
@@ -191,7 +289,7 @@ export default function InboxPage() {
                     type="button"
                     className="btn btn--secondary btn--sm"
                     onClick={() => skip(tx)}
-                    disabled={busy}
+                    disabled={busy || savingId === tx.id}
                   >
                     跳過
                   </button>

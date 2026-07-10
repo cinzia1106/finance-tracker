@@ -2,6 +2,7 @@ import type { TransactionDraft } from '../../data/adapter';
 import type { Transaction, TransactionType } from '../../types/models';
 
 const REQUIRED_HEADERS = ['date', 'type', 'amount', 'category', 'account', 'to_account', 'note'] as const;
+const OPTIONAL_HEADERS = ['tag', 'tags'] as const;
 const TYPE_SET = new Set<TransactionType>(['expense', 'income', 'transfer']);
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const INTEGER_PATTERN = /^-?\d+$/;
@@ -16,6 +17,8 @@ export interface CsvRecord {
   account: string;
   to_account: string;
   note: string;
+  tag?: string;
+  tags?: string;
 }
 
 export interface ImportPreviewRow {
@@ -85,15 +88,24 @@ function parseCsv(text: string) {
   }
 
   const headers = splitCsvLine(lines[0]);
-  const headerErrors = REQUIRED_HEADERS.filter((header, index) => headers[index] !== header);
-  if (headers.length !== REQUIRED_HEADERS.length || headerErrors.length > 0) {
-    throw new Error(`CSV headers must be exactly: ${REQUIRED_HEADERS.join(',')}`);
+  const requiredHeaderErrors = REQUIRED_HEADERS.filter((header, index) => headers[index] !== header);
+  const extraHeaders = headers.slice(REQUIRED_HEADERS.length);
+  const unsupportedExtraHeaders = extraHeaders.filter(
+    (header) => !OPTIONAL_HEADERS.includes(header as (typeof OPTIONAL_HEADERS)[number]),
+  );
+  if (
+    headers.length < REQUIRED_HEADERS.length ||
+    headers.length > REQUIRED_HEADERS.length + 1 ||
+    requiredHeaderErrors.length > 0 ||
+    unsupportedExtraHeaders.length > 0
+  ) {
+    throw new Error(`CSV headers must start with: ${REQUIRED_HEADERS.join(',')} and may include optional tag.`);
   }
 
   return lines.slice(1).map((line, index) => {
     const cells = splitCsvLine(line);
-    const record = REQUIRED_HEADERS.reduce<CsvRecord>((result, header, cellIndex) => {
-      result[header] = cells[cellIndex] ?? '';
+    const record = headers.reduce<CsvRecord>((result, header, cellIndex) => {
+      result[header as keyof CsvRecord] = cells[cellIndex] ?? '';
       return result;
     }, {} as CsvRecord);
 
@@ -149,7 +161,7 @@ function validateRecord(record: CsvRecord, columnCount: number) {
   const warnings: string[] = [];
   const type = record.type as TransactionType;
 
-  if (columnCount !== REQUIRED_HEADERS.length) {
+  if (columnCount < REQUIRED_HEADERS.length || columnCount > REQUIRED_HEADERS.length + 1) {
     errors.push('Column count does not match the required schema.');
   }
   if (!isRealDate(record.date)) {
@@ -187,6 +199,14 @@ function validateRecord(record: CsvRecord, columnCount: number) {
   return { errors, warnings };
 }
 
+function parseTags(record: CsvRecord) {
+  const raw = record.tags ?? record.tag ?? '';
+  return raw
+    .split(/[;；|、]/)
+    .map((tag) => tag.trim().replace(/^#/, ''))
+    .filter(Boolean);
+}
+
 export function buildImportPreview(csvText: string, existingTransactions: Transaction[]): ImportPreview {
   const existingKeys = existingDedupeKeys(existingTransactions);
   const seenKeys = new Set<string>();
@@ -219,7 +239,7 @@ export function buildImportPreview(csvText: string, existingTransactions: Transa
             account: record.account,
             toAccount: record.to_account || undefined,
             note: record.note,
-            tags: [],
+            tags: parseTags(record),
             status: status === 'needs_review' ? 'needs_review' : 'confirmed',
             source: 'import',
             rawPayload: { ...record },

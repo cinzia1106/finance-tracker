@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAdapter } from '../../data/AdapterContext';
-import { CATEGORY_DEFINITIONS } from '../../data/categoryDefinitions';
+import { CATEGORY_DEFINITIONS, tagsForCategory } from '../../data/categoryDefinitions';
 import { summarizeAutomation } from '../../data/transactionAutomation';
 import type { Transaction } from '../../types/models';
 import { AutomationStrip, EmptyState } from '../../components/ui';
@@ -39,11 +39,8 @@ function rowStateClass(tx: Transaction) {
   return '';
 }
 
-/** 生活 sub-tags (user taxonomy): toggled as ordinary tags. */
-const LIFE_SUBTAGS = ['食', '衣', '樂'];
-
-function hasLifeSubtags(tx: Transaction) {
-  return tx.type === 'expense' && tx.category === '生活';
+function categoryTags(tx: Transaction) {
+  return tagsForCategory(tx.category);
 }
 
 /** Category options for inline editing, keyed by transaction type;
@@ -64,6 +61,7 @@ export default function TransactionsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+  const [tagEditorId, setTagEditorId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,7 +146,7 @@ export default function TransactionsPage() {
     }
   }
 
-  async function toggleLifeTag(tx: Transaction, tag: string) {
+  async function toggleTag(tx: Transaction, tag: string) {
     if (!adapter.updateTransaction) return;
     const tags = tx.tags.includes(tag)
       ? tx.tags.filter((t) => t !== tag)
@@ -163,6 +161,40 @@ export default function TransactionsPage() {
     } finally {
       setSavingId(null);
     }
+  }
+
+  /** Tags cell: active tags as removable chips; ＋ expands the category's
+      full tag options inline (row grows while editing, nothing clips). */
+  function renderTags(tx: Transaction) {
+    const options = categoryTags(tx);
+    const editing = tagEditorId === tx.id;
+    const shown = editing ? [...new Set([...options, ...tx.tags])] : tx.tags;
+    if (shown.length === 0 && options.length === 0) return null;
+    return (
+      <span className="tx-tags">
+        {shown.map((tag) => (
+          <button
+            key={tag}
+            type="button"
+            className={`tx-subtag${tx.tags.includes(tag) ? ' tx-subtag--on' : ''}`}
+            disabled={savingId === tx.id}
+            onClick={() => void toggleTag(tx, tag)}
+          >
+            {tag}
+          </button>
+        ))}
+        {options.length > 0 && (
+          <button
+            type="button"
+            className="tx-subtag tx-subtag--edit"
+            onClick={() => setTagEditorId(editing ? null : tx.id)}
+            aria-label={editing ? '完成編輯標籤' : '編輯標籤'}
+          >
+            {editing ? '完成' : '＋'}
+          </button>
+        )}
+      </span>
+    );
   }
 
   return (
@@ -274,30 +306,7 @@ export default function TransactionsPage() {
                   <span className="cell-ellipsis" title={tx.note || undefined}>
                     {tx.note || '—'}
                   </span>
-                  <span
-                    className="cell-ellipsis caption tx-col-tags"
-                    title={tx.tags.length > 0 ? tx.tags.map((t) => `#${t}`).join(' ') : undefined}
-                  >
-                    {hasLifeSubtags(tx) ? (
-                      <span className="tx-subtags">
-                        {LIFE_SUBTAGS.map((tag) => (
-                          <button
-                            key={tag}
-                            type="button"
-                            className={`tx-subtag${tx.tags.includes(tag) ? ' tx-subtag--on' : ''}`}
-                            disabled={savingId === tx.id}
-                            onClick={() => void toggleLifeTag(tx, tag)}
-                          >
-                            {tag}
-                          </button>
-                        ))}
-                      </span>
-                    ) : tx.tags.length > 0 ? (
-                      tx.tags.map((t) => `#${t}`).join(' ')
-                    ) : (
-                      ''
-                    )}
-                  </span>
+                  <span className="caption tx-col-tags tx-tags-cell">{renderTags(tx)}</span>
                   <span className="cell-ellipsis">
                     {tx.toAccount ? `${tx.account} → ${tx.toAccount}` : tx.account}
                   </span>
@@ -351,21 +360,7 @@ export default function TransactionsPage() {
                           )}
                           {tx.type === 'transfer' && <span> · 不計入</span>}
                         </span>
-                        {hasLifeSubtags(tx) && (
-                          <span className="tx-subtags">
-                            {LIFE_SUBTAGS.map((tag) => (
-                              <button
-                                key={tag}
-                                type="button"
-                                className={`tx-subtag${tx.tags.includes(tag) ? ' tx-subtag--on' : ''}`}
-                                disabled={savingId === tx.id}
-                                onClick={() => void toggleLifeTag(tx, tag)}
-                              >
-                                {tag}
-                              </button>
-                            ))}
-                          </span>
-                        )}
+                        {renderTags(tx)}
                       </span>
                       <span className={`amount-s ${amountClass(tx)}`}>{displayAmount(tx)}</span>
                     </div>

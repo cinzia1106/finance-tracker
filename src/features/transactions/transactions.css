@@ -16,8 +16,8 @@
   overflow-x: auto;
 }
 .tx-grid {
-  grid-template-columns: 48px 40px 64px minmax(200px, 1fr) 96px 136px 96px 52px;
-  min-width: 780px;
+  grid-template-columns: 48px 40px 72px minmax(180px, 1fr) minmax(150px, 0.6fr) 128px 96px 52px;
+  min-width: 840px;
 }
 .tx-grid.data-table__row {
   padding: 7px 0;
@@ -89,10 +89,16 @@
   color: var(--color-ink-60);
 }
 
-/* 生活 sub-tags */
-.tx-subtags {
-  display: inline-flex;
-  gap: 4px;
+/* Tag chips (active tags + inline editor) */
+.tx-tags-cell {
+  overflow: visible;
+  white-space: normal;
+}
+.tx-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 4px;
+  align-items: center;
 }
 .tx-subtag {
   display: inline-flex;
@@ -119,6 +125,14 @@
   opacity: 0.5;
   cursor: default;
 }
+.tx-subtag--edit {
+  border-style: dashed;
+  color: var(--color-ink-40);
+}
+.tx-subtag--edit:hover {
+  color: var(--color-mint-deep);
+  border-color: var(--color-mint-border);
+}
 
 .tx-edit-error {
   padding: 8px 12px;
@@ -140,7 +154,7 @@
     display: none;
   }
   .tx-grid {
-    grid-template-columns: 48px 40px 64px minmax(200px, 1fr) 136px 96px 52px;
+    grid-template-columns: 48px 40px 72px minmax(180px, 1fr) 128px 96px 52px;
     min-width: 660px;
   }
 }

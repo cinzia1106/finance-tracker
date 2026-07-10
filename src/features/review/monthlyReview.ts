@@ -1,4 +1,5 @@
 import type { DataAdapter } from '../../data/adapter';
+import { categoryGroupFor } from '../../data/categoryDefinitions';
 import type { AssetSnapshot, LiabilitySnapshot, Transaction } from '../../types/models';
 
 export interface CategoryAmount {
@@ -83,36 +84,9 @@ function groupByCategory(rows: Transaction[], includeGroup = false) {
 }
 
 function classifyCategoryGroup(category: string): CategoryGroupAmount['group'] {
-  const normalized = category.trim().toLowerCase();
-
-  if (
-    normalized.includes('subscription') ||
-    normalized.includes('rent') ||
-    normalized.includes('insurance') ||
-    normalized.includes('utility') ||
-    normalized.includes('訂閱') ||
-    normalized.includes('房租') ||
-    normalized.includes('保險') ||
-    normalized.includes('水電')
-  ) {
-    return 'fixed';
-  }
-
-  if (
-    normalized.includes('learning') ||
-    normalized.includes('course') ||
-    normalized.includes('book') ||
-    normalized.includes('health') ||
-    normalized.includes('fitness') ||
-    normalized.includes('工作') ||
-    normalized.includes('學習') ||
-    normalized.includes('課程') ||
-    normalized.includes('書') ||
-    normalized.includes('健身')
-  ) {
-    return 'self-investment';
-  }
-
+  const group = categoryGroupFor(category);
+  if (group === 'fixed') return 'fixed';
+  if (group === 'growth') return 'self-investment';
   return 'variable';
 }
 

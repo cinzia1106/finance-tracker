@@ -259,7 +259,7 @@ export default function ImportPage() {
             }}
             disabled={busy}
           >
-            <span className="mono import-schema">date,type,amount,category,account,to_account,note</span>
+            <span className="mono import-schema">date,type,amount,category,account,to_account,note,tag</span>
             <span className="caption">拖放 CSV 到這裡，或點擊選擇檔案</span>
           </button>
           <input
@@ -322,7 +322,7 @@ export default function ImportPage() {
             disabled={busy}
           >
             <span className="mono import-schema">
-              {statementSource === 'post-office-csv' ? '.csv' : '.pdf'} → date,type,amount,category,account,to_account,note
+              {statementSource === 'post-office-csv' ? '.csv' : '.pdf'} → date,type,amount,category,account,to_account,note,tag
             </span>
             <span className="caption">拖放帳單檔案到這裡，或點擊選擇檔案</span>
           </button>

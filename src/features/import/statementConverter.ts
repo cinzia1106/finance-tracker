@@ -1,6 +1,6 @@
 import type { TransactionType } from '../../types/models';
 
-const STANDARD_HEADERS = ['date', 'type', 'amount', 'category', 'account', 'to_account', 'note'] as const;
+const STANDARD_HEADERS = ['date', 'type', 'amount', 'category', 'account', 'to_account', 'note', 'tag'] as const;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export type StatementSource = 'post-office-csv' | 'ctbc-deposit-pdf';
@@ -13,6 +13,7 @@ export interface StandardCsvRow {
   account: string;
   to_account: string;
   note: string;
+  tag: string;
 }
 
 export interface ConvertedStatementRow {
@@ -422,6 +423,7 @@ export function classifyStatementRow(input: RawStatementRow): ConvertedStatement
       account: input.account,
       to_account: '',
       note: rawNote,
+      tag: '股利',
     }, 'dividend keyword');
   }
 
@@ -434,6 +436,7 @@ export function classifyStatementRow(input: RawStatementRow): ConvertedStatement
       account: input.account,
       to_account: '現金',
       note: rawNote,
+      tag: '帳戶移轉',
     }, 'cash withdrawal keyword');
   }
 
@@ -447,6 +450,7 @@ export function classifyStatementRow(input: RawStatementRow): ConvertedStatement
       account: outgoing ? input.account : '投資帳戶',
       to_account: outgoing ? '投資帳戶' : input.account,
       note: rawNote,
+      tag: '股票',
     }, 'securities settlement requires confirmation');
   }
 
@@ -460,6 +464,7 @@ export function classifyStatementRow(input: RawStatementRow): ConvertedStatement
       account: outgoing ? input.account : '待確認來源',
       to_account: outgoing ? '待確認去向' : input.account,
       note: rawNote,
+      tag: '帳戶移轉',
     }, 'transfer counterparty requires confirmation');
   }
 
@@ -472,6 +477,7 @@ export function classifyStatementRow(input: RawStatementRow): ConvertedStatement
       account: input.account,
       to_account: '',
       note: rawNote,
+      tag: '待確認',
     }, 'income category requires confirmation');
   }
 
@@ -484,6 +490,7 @@ export function classifyStatementRow(input: RawStatementRow): ConvertedStatement
       account: input.account,
       to_account: '',
       note: rawNote,
+      tag: '待確認',
     }, 'expense category requires confirmation');
   }
 
@@ -495,5 +502,6 @@ export function classifyStatementRow(input: RawStatementRow): ConvertedStatement
     account: input.account,
     to_account: '',
     note: rawNote,
+    tag: '待確認',
   }, 'direction could not be determined');
 }
