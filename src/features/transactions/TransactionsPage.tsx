@@ -62,6 +62,9 @@ export default function TransactionsPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [tagEditorId, setTagEditorId] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [noteEditId, setNoteEditId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -87,13 +90,23 @@ export default function TransactionsPage() {
         return false;
       if (statusFilter === 'needs_review' && tx.status !== 'needs_review') return false;
       if (statusFilter === 'transfer' && tx.type !== 'transfer') return false;
+      if (categoryFilter && tx.category !== categoryFilter) return false;
       if (!q) return true;
       return [tx.note, tx.category, tx.account, tx.toAccount ?? '', ...tx.tags]
         .join(' ')
         .toLowerCase()
         .includes(q);
     });
-  }, [transactions, search, statusFilter]);
+  }, [transactions, search, statusFilter, categoryFilter]);
+
+  /** Categories present in the loaded month, for the filter dropdown. */
+  const presentCategories = useMemo(() => {
+    const names = new Set<string>();
+    for (const tx of transactions ?? []) {
+      if (tx.category) names.add(tx.category);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  }, [transactions]);
 
   const totals = useMemo(() => {
     let income = 0;
@@ -161,6 +174,57 @@ export default function TransactionsPage() {
     } finally {
       setSavingId(null);
     }
+  }
+
+  function startNoteEdit(tx: Transaction) {
+    setNoteEditId(tx.id);
+    setNoteDraft(tx.note);
+  }
+
+  async function saveNote(tx: Transaction) {
+    const note = noteDraft.trim();
+    setNoteEditId(null);
+    if (!adapter.updateTransaction || note === tx.note) return;
+    setSavingId(tx.id);
+    setEditError(null);
+    try {
+      await adapter.updateTransaction(tx.id, { note });
+      patchLocal(tx.id, { note });
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : '備註更新失敗，請稍後再試。');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  /** Inline note editor: click the note to edit, Enter/blur saves, Esc cancels. */
+  function renderNote(tx: Transaction) {
+    if (noteEditId === tx.id) {
+      return (
+        <input
+          className="text-input tx-note-input"
+          value={noteDraft}
+          autoFocus
+          onChange={(event) => setNoteDraft(event.target.value)}
+          onBlur={() => void saveNote(tx)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') (event.target as HTMLInputElement).blur();
+            if (event.key === 'Escape') setNoteEditId(null);
+          }}
+        />
+      );
+    }
+    return (
+      <button
+        type="button"
+        className="tx-note-btn cell-ellipsis"
+        title={tx.note ? `${tx.note}（點擊編輯）` : '點擊編輯備註'}
+        disabled={savingId === tx.id}
+        onClick={() => startNoteEdit(tx)}
+      >
+        {tx.note || '—'}
+      </button>
+    );
   }
 
   /** Tags cell: active tags as removable chips; ＋ expands the category's
@@ -240,6 +304,19 @@ export default function TransactionsPage() {
             </button>
           ))}
         </div>
+        <select
+          className={`text-input tx-cat-filter${categoryFilter ? ' tx-cat-filter--active' : ''}`}
+          value={categoryFilter}
+          onChange={(event) => setCategoryFilter(event.target.value)}
+          aria-label="依分類篩選"
+        >
+          <option value="">全部分類</option>
+          {presentCategories.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {editError && <div className="tx-edit-error caption">{editError}</div>}
@@ -303,11 +380,12 @@ export default function TransactionsPage() {
                       </select>
                     )}
                   </span>
-                  <span className="cell-ellipsis" title={tx.note || undefined}>
-                    {tx.note || '—'}
-                  </span>
+                  <span className="tx-note-cell">{renderNote(tx)}</span>
                   <span className="caption tx-col-tags tx-tags-cell">{renderTags(tx)}</span>
-                  <span className="cell-ellipsis">
+                  <span
+                    className={tx.toAccount ? 'tx-account--wrap' : 'cell-ellipsis'}
+                    title={tx.toAccount ? `${tx.account} → ${tx.toAccount}` : tx.account}
+                  >
                     {tx.toAccount ? `${tx.account} → ${tx.toAccount}` : tx.account}
                   </span>
                   <span className={`cell-right ${amountClass(tx)}`}>{displayAmount(tx)}</span>
@@ -332,9 +410,17 @@ export default function TransactionsPage() {
                   {rows.map((tx) => (
                     <div key={tx.id} className={`list-row tx-mobile-row${rowStateClass(tx)}`}>
                       <span className="tx-mobile-main">
-                        <span className={tx.type === 'transfer' ? 'tx-muted' : ''}>
-                          {tx.note || tx.category || '—'}
-                        </span>
+                        {noteEditId === tx.id ? (
+                          renderNote(tx)
+                        ) : (
+                          <button
+                            type="button"
+                            className={`tx-note-btn${tx.type === 'transfer' ? ' tx-muted' : ''}`}
+                            onClick={() => startNoteEdit(tx)}
+                          >
+                            {tx.note || tx.category || '—'}
+                          </button>
+                        )}
                         <span className="caption tx-mobile-meta">
                           {tx.type === 'transfer' ? (
                             tx.category
