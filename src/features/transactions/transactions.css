@@ -16,8 +16,8 @@
   overflow-x: auto;
 }
 .tx-grid {
-  grid-template-columns: 48px 40px 72px minmax(180px, 1fr) minmax(150px, 0.6fr) 128px 96px 52px 28px;
-  min-width: 880px;
+  grid-template-columns: 48px 40px 72px minmax(160px, 1fr) minmax(140px, 0.5fr) minmax(150px, auto) 96px 52px 28px;
+  min-width: 900px;
 }
 .tx-grid.data-table__row {
   padding: 7px 0;
@@ -233,13 +233,19 @@
   font-size: 13px;
 }
 
-/* Transfer accounts wrap so the full route stays readable */
+/* Transfer route stays complete on a single line (column sizes to content) */
 .tx-account--wrap {
-  white-space: normal;
-  overflow-wrap: anywhere;
-  line-height: 1.35;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--color-ink-70);
+}
+
+/* Type text carries the flow direction at a glance */
+.tx-type-income {
+  color: var(--color-income-text);
+}
+.tx-type-transfer {
+  color: var(--color-ink-muted-row);
 }
 .tx-account-edit {
   margin-left: 6px;
@@ -277,8 +283,8 @@
     display: none;
   }
   .tx-grid {
-    grid-template-columns: 48px 40px 72px minmax(180px, 1fr) 128px 96px 52px 28px;
-    min-width: 700px;
+    grid-template-columns: 48px 40px 72px minmax(160px, 1fr) minmax(150px, auto) 96px 52px 28px;
+    min-width: 720px;
   }
 }
 

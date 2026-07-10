@@ -230,8 +230,12 @@ export default function DashboardPage() {
                       </span>
                     )}
                   </span>
-                  <span style={{ color: tx.type === 'transfer' ? undefined : 'var(--color-ink-70)' }}>
-                    {tx.account}
+                  <span
+                    className="dashboard__tx-account"
+                    style={{ color: tx.type === 'transfer' ? undefined : 'var(--color-ink-70)' }}
+                    title={tx.account.replaceAll('->', '→')}
+                  >
+                    {tx.account.replaceAll('->', '→')}
                   </span>
                   <span className="mono cell-right">
                     {tx.type === 'transfer' ? formatPlain(tx.amount) : formatSigned(tx.amount)}

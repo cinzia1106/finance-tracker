@@ -498,7 +498,7 @@ export default function TransactionsPage() {
                   <span className="mono caption">{dayStart ? tx.date.slice(5) : ''}</span>
                   <span>
                     <select
-                      className="tx-cat-select"
+                      className={`tx-cat-select tx-type-${tx.type}`}
                       value={tx.type}
                       disabled={savingId === tx.id}
                       onChange={(event) =>

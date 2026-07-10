@@ -135,7 +135,11 @@
 
 /* Recent-transactions table columns (desktop) */
 .dashboard__tx-grid {
-  grid-template-columns: 64px 72px 1fr 130px 110px 76px;
+  grid-template-columns: 64px 72px 1fr minmax(150px, auto) 110px 76px;
+}
+.dashboard__tx-account {
+  white-space: nowrap;
+  font-size: 12px;
 }
 
 @media (max-width: 959px) {
