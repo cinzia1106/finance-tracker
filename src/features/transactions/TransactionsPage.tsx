@@ -82,6 +82,7 @@ export default function TransactionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transferEditId, setTransferEditId] = useState<string | null>(null);
   const [transferDraft, setTransferDraft] = useState({ from: '', to: '' });
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,6 +129,22 @@ export default function TransactionsPage() {
         .includes(q);
     });
   }, [transactions, search, statusFilter, categoryFilter]);
+
+  /** Rows sharing the spec dedupe key (date|type|amount|account|to|note)
+      are flagged as likely duplicates — display only. */
+  const duplicateKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const tx of transactions ?? []) {
+      const key = [tx.date, tx.type, tx.amount, tx.account, tx.toAccount ?? '', tx.note].join('|');
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [transactions]);
+
+  function isDuplicate(tx: Transaction) {
+    const key = [tx.date, tx.type, tx.amount, tx.account, tx.toAccount ?? '', tx.note].join('|');
+    return (duplicateKeys.get(key) ?? 0) > 1;
+  }
 
   /** Categories present in the loaded month, for the filter dropdown. */
   const presentCategories = useMemo(() => {
@@ -274,6 +291,21 @@ export default function TransactionsPage() {
       patchLocal(tx.id, patch);
     } catch (err) {
       setEditError(err instanceof Error ? err.message : errorMessage);
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function deleteTx(tx: Transaction) {
+    if (!adapter.deleteTransaction) return;
+    setSavingId(tx.id);
+    setEditError(null);
+    try {
+      await adapter.deleteTransaction(tx.id);
+      setTransactions((prev) => (prev ?? []).filter((row) => row.id !== tx.id));
+      setDeleteId(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : '刪除失敗，請稍後再試。');
     } finally {
       setSavingId(null);
     }
@@ -451,6 +483,7 @@ export default function TransactionsPage() {
                 <span>帳戶</span>
                 <span className="cell-right">金額</span>
                 <span>狀態</span>
+                <span />
               </div>
               {filtered.map((tx, index) => {
                 // Ledger style: print the date once per day group
@@ -499,7 +532,10 @@ export default function TransactionsPage() {
                       </select>
                     )}
                   </span>
-                  <span className="tx-note-cell">{renderNote(tx)}</span>
+                  <span className="tx-note-cell">
+                    {isDuplicate(tx) && <span className="tx-dup-chip">重複</span>}
+                    {renderNote(tx)}
+                  </span>
                   <span className="caption tx-col-tags tx-tags-cell">{renderTags(tx)}</span>
                   <span
                     className={tx.toAccount ? 'tx-account--wrap' : 'cell-ellipsis'}
@@ -525,7 +561,42 @@ export default function TransactionsPage() {
                   ) : (
                     <span className="status-text--confirmed">已確認</span>
                   )}
+                  <button
+                    type="button"
+                    className="tx-delete-btn"
+                    disabled={savingId === tx.id}
+                    onClick={() => setDeleteId(deleteId === tx.id ? null : tx.id)}
+                    aria-label="刪除這筆交易"
+                    title="刪除"
+                  >
+                    ✕
+                  </button>
                 </div>
+                {deleteId === tx.id && (
+                  <div className="tx-delete-confirm">
+                    <span className="caption tx-delete-confirm__text">
+                      刪除這筆交易？（{tx.date.slice(5)} · {tx.note || tx.category} ·{' '}
+                      <span className="mono">{displayAmount(tx)}</span>）此動作無法復原。
+                    </span>
+                    <span className="tx-delete-confirm__actions">
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm tx-delete-confirm__danger"
+                        disabled={savingId === tx.id}
+                        onClick={() => void deleteTx(tx)}
+                      >
+                        確認刪除
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => setDeleteId(null)}
+                      >
+                        取消
+                      </button>
+                    </span>
+                  </div>
+                )}
                 {transferEditId === tx.id && (
                   <div className="tx-transfer-editor">
                     <span className="micro tx-transfer-editor__label">轉帳帳戶</span>
