@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAdapter } from '../../data/AdapterContext';
+import { CATEGORY_DEFINITIONS } from '../../data/categoryDefinitions';
 import { summarizeAutomation } from '../../data/transactionAutomation';
 import type { Transaction } from '../../types/models';
 import { AutomationStrip, EmptyState } from '../../components/ui';
@@ -38,6 +39,21 @@ function rowStateClass(tx: Transaction) {
   return '';
 }
 
+/** 生活 sub-tags (user taxonomy): toggled as ordinary tags. */
+const LIFE_SUBTAGS = ['食', '衣', '樂'];
+
+function hasLifeSubtags(tx: Transaction) {
+  return tx.type === 'expense' && tx.category === '生活';
+}
+
+/** Category options for inline editing, keyed by transaction type;
+    always includes the current value so the select never shows blank. */
+function categoryOptions(tx: Transaction) {
+  const names = CATEGORY_DEFINITIONS.filter((c) => c.kind === tx.type).map((c) => c.name);
+  if (tx.category && !names.includes(tx.category)) names.unshift(tx.category);
+  return names;
+}
+
 export default function TransactionsPage() {
   const adapter = useAdapter();
   const now = new Date();
@@ -46,6 +62,8 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[] | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,6 +128,43 @@ export default function TransactionsPage() {
     setMonth(d.getMonth() + 1);
   }
 
+  function patchLocal(id: string, patch: Partial<Transaction>) {
+    setTransactions((prev) =>
+      (prev ?? []).map((row) => (row.id === id ? { ...row, ...patch } : row)),
+    );
+  }
+
+  async function changeCategory(tx: Transaction, category: string) {
+    if (!adapter.updateTransaction || category === tx.category) return;
+    setSavingId(tx.id);
+    setEditError(null);
+    try {
+      await adapter.updateTransaction(tx.id, { category });
+      patchLocal(tx.id, { category });
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : '分類更新失敗，請稍後再試。');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function toggleLifeTag(tx: Transaction, tag: string) {
+    if (!adapter.updateTransaction) return;
+    const tags = tx.tags.includes(tag)
+      ? tx.tags.filter((t) => t !== tag)
+      : [...tx.tags, tag];
+    setSavingId(tx.id);
+    setEditError(null);
+    try {
+      await adapter.updateTransaction(tx.id, { tags });
+      patchLocal(tx.id, { tags });
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : '標籤更新失敗，請稍後再試。');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   return (
     <>
       <header className="page-header">
@@ -155,6 +210,8 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {editError && <div className="tx-edit-error caption">{editError}</div>}
+
       <div className="grid-12">
         {transactions === null ? (
           <section className="card span-12">
@@ -195,12 +252,51 @@ export default function TransactionsPage() {
                 >
                   <span className="mono caption">{dayStart ? tx.date.slice(5) : ''}</span>
                   <span>{tx.type === 'expense' ? '支出' : tx.type === 'income' ? '收入' : '轉帳'}</span>
-                  <span>{tx.category || '—'}</span>
+                  <span>
+                    {tx.type === 'transfer' ? (
+                      tx.category || '—'
+                    ) : (
+                      <select
+                        className="tx-cat-select"
+                        value={tx.category}
+                        disabled={savingId === tx.id}
+                        onChange={(event) => void changeCategory(tx, event.target.value)}
+                        aria-label="編輯分類"
+                      >
+                        {categoryOptions(tx).map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </span>
                   <span className="cell-ellipsis" title={tx.note || undefined}>
                     {tx.note || '—'}
                   </span>
-                  <span className="cell-ellipsis caption tx-col-tags">
-                    {tx.tags.length > 0 ? tx.tags.map((t) => `#${t}`).join(' ') : ''}
+                  <span
+                    className="cell-ellipsis caption tx-col-tags"
+                    title={tx.tags.length > 0 ? tx.tags.map((t) => `#${t}`).join(' ') : undefined}
+                  >
+                    {hasLifeSubtags(tx) ? (
+                      <span className="tx-subtags">
+                        {LIFE_SUBTAGS.map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            className={`tx-subtag${tx.tags.includes(tag) ? ' tx-subtag--on' : ''}`}
+                            disabled={savingId === tx.id}
+                            onClick={() => void toggleLifeTag(tx, tag)}
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </span>
+                    ) : tx.tags.length > 0 ? (
+                      tx.tags.map((t) => `#${t}`).join(' ')
+                    ) : (
+                      ''
+                    )}
                   </span>
                   <span className="cell-ellipsis">
                     {tx.toAccount ? `${tx.account} → ${tx.toAccount}` : tx.account}
@@ -230,8 +326,24 @@ export default function TransactionsPage() {
                         <span className={tx.type === 'transfer' ? 'tx-muted' : ''}>
                           {tx.note || tx.category || '—'}
                         </span>
-                        <span className="caption">
-                          {tx.category}
+                        <span className="caption tx-mobile-meta">
+                          {tx.type === 'transfer' ? (
+                            tx.category
+                          ) : (
+                            <select
+                              className="tx-cat-select tx-cat-select--sm"
+                              value={tx.category}
+                              disabled={savingId === tx.id}
+                              onChange={(event) => void changeCategory(tx, event.target.value)}
+                              aria-label="編輯分類"
+                            >
+                              {categoryOptions(tx).map((name) => (
+                                <option key={name} value={name}>
+                                  {name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                           {' · '}
                           {tx.toAccount ? `${tx.account} → ${tx.toAccount}` : tx.account}
                           {tx.status === 'needs_review' && (
@@ -239,6 +351,21 @@ export default function TransactionsPage() {
                           )}
                           {tx.type === 'transfer' && <span> · 不計入</span>}
                         </span>
+                        {hasLifeSubtags(tx) && (
+                          <span className="tx-subtags">
+                            {LIFE_SUBTAGS.map((tag) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                className={`tx-subtag${tx.tags.includes(tag) ? ' tx-subtag--on' : ''}`}
+                                disabled={savingId === tx.id}
+                                onClick={() => void toggleLifeTag(tx, tag)}
+                              >
+                                {tag}
+                              </button>
+                            ))}
+                          </span>
+                        )}
                       </span>
                       <span className={`amount-s ${amountClass(tx)}`}>{displayAmount(tx)}</span>
                     </div>

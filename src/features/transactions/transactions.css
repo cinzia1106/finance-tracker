@@ -58,6 +58,82 @@
   color: var(--color-ink-muted-row);
 }
 
+/* Inline category editing */
+.tx-cat-select {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-ink);
+  padding: 0 12px 0 0;
+  cursor: pointer;
+  max-width: 100%;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-ink-40) 50%),
+    linear-gradient(135deg, var(--color-ink-40) 50%, transparent 50%);
+  background-position: right 4px top 55%, right 0 top 55%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+.tx-cat-select:hover,
+.tx-cat-select:focus {
+  color: var(--color-mint-deep);
+  outline: none;
+}
+.tx-cat-select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.tx-cat-select--sm {
+  font-size: 12px;
+  color: var(--color-ink-60);
+}
+
+/* 生活 sub-tags */
+.tx-subtags {
+  display: inline-flex;
+  gap: 4px;
+}
+.tx-subtag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: var(--border-hairline);
+  background: var(--color-card);
+  color: var(--color-ink-60);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  cursor: pointer;
+}
+.tx-subtag:hover {
+  background: var(--color-row-hover);
+}
+.tx-subtag--on {
+  background: var(--color-mint-tint);
+  border-color: var(--color-mint-border);
+  color: var(--color-mint-deeper);
+  font-weight: 500;
+}
+.tx-subtag:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.tx-edit-error {
+  padding: 8px 12px;
+  border-radius: var(--radius-badge);
+  background: var(--color-apricot-tint);
+  color: var(--color-apricot-deep);
+}
+
+.tx-mobile-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
 /* Narrow desktops: drop the tags column so note/account keep room. */
 @media (min-width: 960px) and (max-width: 1199px) {
   .tx-col-tags {
