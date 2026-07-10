@@ -314,19 +314,20 @@ function buildAccountRows(input: {
   const accounts: AccountBalanceRow[] = input.accounts.map((account) => {
     const assetSnapshot = account.id ? snapshotsByAccountId.get(account.id) : undefined;
     const debtSnapshot = account.id ? debtByAccountId.get(account.id) : undefined;
-    const snapshot = assetSnapshot ?? undefined;
     const isLiability = account.type === 'credit_card';
-    const stale = snapshot ? daysBetween(snapshot.date, input.throughDate) > 90 : true;
+    const effectiveDate = isLiability ? debtSnapshot?.date : assetSnapshot?.date;
+    const effectiveSource = isLiability ? debtSnapshot?.source : assetSnapshot?.source;
+    const stale = effectiveDate ? daysBetween(effectiveDate, input.throughDate) > 90 : true;
     const balance = isLiability
       ? debtSnapshot?.remainingBalance ?? null
       : stale
         ? null
-        : snapshot?.balance ?? null;
+        : assetSnapshot?.balance ?? null;
     if ((account.type === 'cash' || account.type === 'bank') && typeof balance === 'number') {
       cashAndBank += balance;
     }
-    if (snapshot?.date && (confirmedAt === '--' || snapshot.date > confirmedAt)) {
-      confirmedAt = snapshot.date;
+    if (effectiveDate && (confirmedAt === '--' || effectiveDate > confirmedAt)) {
+      confirmedAt = effectiveDate;
     }
 
     return {
@@ -336,8 +337,8 @@ function buildAccountRows(input: {
       typeLabel: account.type,
       balance,
       isLiability,
-      confirmedAt: stale ? formatYearMonth(snapshot?.date) : formatMonthDay(snapshot?.date),
-      sourceLabel: snapshot ? SOURCE_LABELS[snapshot.source] : '',
+      confirmedAt: stale ? formatYearMonth(effectiveDate) : formatMonthDay(effectiveDate),
+      sourceLabel: effectiveSource ? SOURCE_LABELS[effectiveSource] : '',
       stale,
     };
   });
@@ -367,7 +368,9 @@ export function buildAssetOverview(input: {
     throughDate: today,
   });
   const latestInvestments = current.latestAssets.filter(
-    (snapshot) => snapshot.marketValue != null || snapshot.costBasis != null,
+    (snapshot) =>
+      (snapshot.marketValue != null || snapshot.costBasis != null) &&
+      daysBetween(snapshot.date, today) <= 90,
   );
   const investmentValue = latestInvestments.reduce(
     (total, snapshot) => total + (snapshot.marketValue ?? snapshot.balance),
@@ -405,7 +408,11 @@ export function buildAssetOverview(input: {
       throughDate,
     });
     const monthInvestment = rows.latestAssets
-      .filter((snapshot) => snapshot.marketValue != null || snapshot.costBasis != null)
+      .filter(
+        (snapshot) =>
+          (snapshot.marketValue != null || snapshot.costBasis != null) &&
+          daysBetween(snapshot.date, throughDate) <= 90,
+      )
       .reduce((total, snapshot) => total + (snapshot.marketValue ?? snapshot.balance), 0);
     const monthDebt = rows.latestDebts.reduce((total, snapshot) => total + snapshot.remainingBalance, 0);
     return { label, value: rows.cashAndBank + monthInvestment - monthDebt };

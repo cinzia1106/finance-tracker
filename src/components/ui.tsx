@@ -143,6 +143,45 @@ export function DonutChart({
   );
 }
 
+/** Slim inline strip for the transaction automation counters. */
+export function AutomationStrip({
+  summary,
+}: {
+  summary: {
+    refunds: number;
+    transfers: number;
+    creditCardPayments: number;
+    investmentSettlements: number;
+    cashWithdrawals: number;
+    reviewHints: number;
+  };
+}) {
+  const items: [string, number][] = [
+    ['退款', summary.refunds],
+    ['轉帳', summary.transfers],
+    ['卡費繳款', summary.creditCardPayments],
+    ['投資交割', summary.investmentSettlements],
+    ['ATM 提款', summary.cashWithdrawals],
+  ];
+  return (
+    <div className="automation-strip">
+      <span className="micro automation-strip__label">自動判別</span>
+      {items.map(([label, value]) => (
+        <span key={label} className="caption automation-strip__item">
+          {label} <span className="mono">{value}</span>
+        </span>
+      ))}
+      <span
+        className={`caption automation-strip__item${
+          summary.reviewHints > 0 ? ' automation-strip__item--warn' : ''
+        }`}
+      >
+        建議確認 <span className="mono">{summary.reviewHints}</span>
+      </span>
+    </div>
+  );
+}
+
 /** 2g empty state: white card, 48px icon block, H2, short caption, actions. */
 export function EmptyState({
   icon = '·',

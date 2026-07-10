@@ -1,10 +1,11 @@
-/* 資產 Asset Overview — visual layer. Derived values and snapshot CRUD
-   come from Phase G; this file only arranges and labels them. */
+/* 資產 Asset Overview — visual layer. Accounts / snapshots CRUD and all
+   derived values are engineering baseline; this file only arranges,
+   labels, and styles them. */
 
 import { useEffect, useState, type FormEvent } from 'react';
 import type { AssetOverview } from '../../data/adapter';
 import { useAdapter } from '../../data/AdapterContext';
-import type { Account } from '../../types/models';
+import type { Account, AccountType } from '../../types/models';
 import { TrendLine, WaterlineBar } from '../../components/ui';
 import {
   formatCurrency,
@@ -15,10 +16,25 @@ import {
 } from '../../lib/format';
 import './assets.css';
 
+const ACCOUNT_TYPES: Array<{ value: AccountType; label: string }> = [
+  { value: 'cash', label: '現金' },
+  { value: 'bank', label: '銀行' },
+  { value: 'credit_card', label: '信用卡' },
+  { value: 'virtual', label: '投資／虛擬' },
+];
+
 export default function AssetsPage() {
   const adapter = useAdapter();
   const [data, setData] = useState<AssetOverview | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [accountForm, setAccountForm] = useState({
+    name: '',
+    type: 'bank' as AccountType,
+    note: '',
+  });
   const [assetForm, setAssetForm] = useState({
     accountId: '',
     date: new Date().toISOString().slice(0, 10),
@@ -33,36 +49,79 @@ export default function AssetsPage() {
     remainingBalance: '',
     nextDueDate: '',
   });
-  const [saving, setSaving] = useState(false);
 
   async function load() {
-    const [overview, accountRows] = await Promise.all([
-      adapter.getAssetOverview(),
-      adapter.listAccounts?.() ?? Promise.resolve([]),
-    ]);
-    setData(overview);
-    setAccounts(accountRows);
+    setLoadError(null);
+    try {
+      const [overview, accountRows] = await Promise.all([
+        adapter.getAssetOverview(),
+        adapter.listAccounts?.() ?? Promise.resolve([]),
+      ]);
+      setData(overview);
+      setAccounts(accountRows);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : '無法載入資產資料。');
+    }
   }
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([adapter.getAssetOverview(), adapter.listAccounts?.() ?? Promise.resolve([])]).then(
-      ([overview, accountRows]) => {
+    Promise.all([adapter.getAssetOverview(), adapter.listAccounts?.() ?? Promise.resolve([])])
+      .then(([overview, accountRows]) => {
         if (!cancelled) {
           setData(overview);
           setAccounts(accountRows);
+          setLoadError(null);
         }
-      },
-    );
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setData(null);
+          setAccounts([]);
+          setLoadError(error instanceof Error ? error.message : '無法載入資產資料。');
+        }
+      });
     return () => {
       cancelled = true;
     };
   }, [adapter]);
 
+  async function createAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!adapter.createAccount || !accountForm.name.trim()) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      const account = await adapter.createAccount({
+        name: accountForm.name.trim(),
+        type: accountForm.type,
+        note: accountForm.note.trim() || undefined,
+        active: true,
+      });
+      setAccountForm({ name: '', type: 'bank', note: '' });
+      if (account.type === 'credit_card') {
+        setDebtForm((current) => ({
+          ...current,
+          accountId: account.id ?? '',
+          name: account.name,
+        }));
+      } else {
+        setAssetForm((current) => ({ ...current, accountId: account.id ?? '' }));
+      }
+      setMessage('帳戶已新增。');
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '無法新增帳戶。');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveAssetSnapshot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!adapter.createAssetSnapshot || !assetForm.accountId || !assetForm.balance) return;
     setSaving(true);
+    setMessage(null);
     try {
       await adapter.createAssetSnapshot({
         accountId: assetForm.accountId,
@@ -73,7 +132,10 @@ export default function AssetsPage() {
         source: 'manual_check',
       });
       setAssetForm((current) => ({ ...current, balance: '', marketValue: '', costBasis: '' }));
+      setMessage('快照已儲存。');
       await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '無法儲存快照。');
     } finally {
       setSaving(false);
     }
@@ -81,32 +143,44 @@ export default function AssetsPage() {
 
   async function saveDebtSnapshot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!adapter.createDebtSnapshot || !debtForm.name || !debtForm.remainingBalance) return;
+    if (!adapter.createDebtSnapshot || !debtForm.name.trim() || !debtForm.remainingBalance) return;
     setSaving(true);
+    setMessage(null);
     try {
       await adapter.createDebtSnapshot({
         accountId: debtForm.accountId || null,
-        name: debtForm.name,
+        name: debtForm.name.trim(),
         date: debtForm.date,
         remainingBalance: Number(debtForm.remainingBalance),
         nextDueDate: debtForm.nextDueDate || undefined,
         source: 'manual_check',
       });
       setDebtForm((current) => ({ ...current, remainingBalance: '', nextDueDate: '' }));
+      setMessage('負債快照已儲存。');
       await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '無法儲存負債快照。');
     } finally {
       setSaving(false);
     }
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <section className="card">
+        <span className="caption">{loadError ?? '載入中…'}</span>
+      </section>
+    );
+  }
 
   const grossAssets = data.cashAndBank + data.investmentValue;
   const cashPct = grossAssets > 0 ? Math.round((data.cashAndBank / grossAssets) * 100) : 0;
   const investPct = grossAssets > 0 ? 100 - cashPct : 0;
   const liabilityPct = grossAssets > 0 ? (data.liabilityTotal / grossAssets) * 100 : 0;
   const safeGeo = waterlineGeometry(data.safeline);
-  const gainNegative = data.investment.unrealizedGain < 0;
+  const assetAccounts = accounts.filter((account) => account.type !== 'credit_card');
+  const creditAccounts = accounts.filter((account) => account.type === 'credit_card');
+  const hasAccounts = accounts.length > 0;
 
   return (
     <>
@@ -118,6 +192,8 @@ export default function AssetsPage() {
           </span>
         </div>
       </header>
+
+      {message && <div className="caption assets__message">{message}</div>}
 
       <div className="grid-12">
         {/* 淨資產 */}
@@ -134,7 +210,11 @@ export default function AssetsPage() {
           <div className="assets__networth-line">
             <div className="amount-xl">{formatCurrency(data.netWorth)}</div>
             <span className="mobile-only assets__sparkline">
-              <TrendLine values={data.netWorthHistory.map((p) => p.value)} width={84} height={30} />
+              <TrendLine
+                values={data.netWorthHistory.map((point) => point.value)}
+                width={84}
+                height={30}
+              />
             </span>
           </div>
           <div className="assets__breakdown desktop-only">
@@ -197,15 +277,15 @@ export default function AssetsPage() {
             <span className="micro assets__note">每月快照 · 近 6 個月</span>
           </div>
           <TrendLine
-            values={data.netWorthHistory.map((p) => p.value)}
+            values={data.netWorthHistory.map((point) => point.value)}
             width={440}
             height={150}
             filled
             gridLines={3}
           />
           <div className="assets__trend-labels mono">
-            {data.netWorthHistory.map((p) => (
-              <span key={p.label}>{p.label}</span>
+            {data.netWorthHistory.map((point) => (
+              <span key={point.label}>{point.label}</span>
             ))}
           </div>
         </section>
@@ -250,38 +330,17 @@ export default function AssetsPage() {
           </div>
         </section>
 
-        {/* 緊急預備金 — mobile */}
-        <section className="card mobile-only">
-          <div className="card__header">
-            <h2 className="h2">緊急預備金</h2>
-            <span className="micro assets__note">最後確認 {data.safeline.confirmedAt}</span>
-          </div>
-          <WaterlineBar safeline={data.safeline} />
-          <div className="assets__safeline-rows">
-            <div className="assets__safeline-row">
-              <span>第一線</span>
-              <span style={{ color: 'var(--color-mint-deep)', fontWeight: 500 }}>
-                {formatPlain(data.safeline.firstLine)}
-                {safeGeo.firstLineMet ? ' ✓ 已達成' : ''}
-              </span>
-            </div>
-            <div className="assets__safeline-row">
-              <span>安心線</span>
-              <span className="liability" style={{ fontWeight: 500 }}>
-                {safeGeo.comfortPct}% · 差 {formatPlain(safeGeo.comfortGap)}
-              </span>
-            </div>
-          </div>
-        </section>
-
         {/* 帳戶餘額 */}
-        <section className="card span-6">
+        <section className="card span-12">
           <div className="card__header">
-            <h2 className="h2 desktop-only">帳戶餘額</h2>
-            <span className="micro desktop-only assets__note">餘額為最後確認值</span>
-            <span className="micro mobile-only">帳戶</span>
-            <span className="micro mobile-only">餘額 · 最後確認</span>
+            <h2 className="h2">帳戶餘額</h2>
+            <span className="micro assets__note">{accounts.length} 個帳戶 · 餘額為最後確認值</span>
           </div>
+          {!hasAccounts && (
+            <div className="caption assets__empty-note">
+              先在下方「月結更新」新增帳戶，再儲存餘額或負債快照開始追蹤。
+            </div>
+          )}
           <div className="desktop-only">
             <div className="data-table__head assets__account-grid">
               <span>帳戶</span>
@@ -318,142 +377,190 @@ export default function AssetsPage() {
               </div>
             ))}
           </div>
-          <div className="mobile-only">
-            {data.accounts
-              .filter((account) => account.accountType === 'bank' || account.accountType === 'cash')
-              .map((account) => (
-                <div key={account.name} className="list-row">
-                  <span>
-                    {account.name}
-                    {account.detail && (
-                      <span className="micro assets__date-note"> {account.detail}</span>
-                    )}
-                    {account.stale && (
-                      <span className="badge--stale badge assets__stale-badge">待更新</span>
-                    )}
-                  </span>
-                  <span className="cell-right">
-                    {account.balance === null ? (
-                      <span className="mono" style={{ color: 'var(--color-ink-40)' }}>
-                        —
-                      </span>
-                    ) : (
-                      <>
-                        <span className="amount-s">{formatPlain(account.balance)}</span>{' '}
-                        <span
-                          className="micro"
-                          style={{ color: 'var(--color-ink-40)', letterSpacing: 0 }}
-                        >
-                          {account.confirmedAt}
-                        </span>
-                      </>
-                    )}
-                  </span>
-                </div>
-              ))}
+          <div className="mobile-only row-list">
+            {data.accounts.map((account) => (
+              <div key={account.name} className="list-row">
+                <span>
+                  {account.name}
+                  <span className="micro assets__date-note"> {account.typeLabel}</span>
+                  {account.stale && (
+                    <span className="badge--stale badge assets__stale-badge">待更新</span>
+                  )}
+                </span>
+                <span className="cell-right">
+                  {account.balance === null ? (
+                    <span className="mono" style={{ color: 'var(--color-ink-40)' }}>
+                      —
+                    </span>
+                  ) : (
+                    <span className={`amount-s${account.isLiability ? ' liability' : ''}`}>
+                      {account.isLiability
+                        ? formatLiability(account.balance)
+                        : formatPlain(account.balance)}
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
           </div>
         </section>
 
-        {/* 右欄：負債 / 緊急預備金 / 投資摘要 */}
-        <div className="span-6 assets__right-col">
-          <section className="card">
-            <div className="card__header">
-              <h2 className="h2 desktop-only">負債</h2>
-              <span className="micro mobile-only">負債</span>
-              <span className="desktop-only" style={{ fontSize: 13 }}>
-                合計{' '}
-                <span className="mono liability" style={{ fontWeight: 600 }}>
-                  {formatLiability(data.liabilityTotal)}
-                </span>
-              </span>
-              <span className="micro mobile-only">剩餘</span>
-            </div>
-            <div className="row-list">
-              {data.liabilities.length === 0 && (
-                <div className="caption assets__empty-note">尚無負債快照。</div>
-              )}
-              {data.liabilities.map((liability) => (
-                <div key={liability.name} className="list-row">
-                  <span>
-                    {liability.name}
-                    {liability.detail && (
-                      <span className="micro assets__date-note"> {liability.detail}</span>
-                    )}
-                  </span>
-                  <span className="amount-s liability">{formatLiability(liability.remaining)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="micro desktop-only" style={{ color: 'var(--color-ink-40)', letterSpacing: 0 }}>
-              淨資產以剩餘本金計算，月付金額僅供現金流預估
-            </div>
-          </section>
-
-          <section className="card desktop-only">
-            <div className="card__header">
-              <h2 className="h2">緊急預備金</h2>
-              <span className="micro assets__note">最後確認 {data.safeline.confirmedAt}</span>
-            </div>
-            <WaterlineBar safeline={data.safeline} />
-            <div className="assets__safeline-inline">
-              <span>
-                第一線 {formatPlain(data.safeline.firstLine)}{' '}
-                <span style={{ color: 'var(--color-mint-deep)', fontWeight: 500 }}>
-                  {safeGeo.firstLineMet ? '✓ 已達成' : ''}
-                </span>
-              </span>
-              <span>
-                安心線 {formatPlain(data.safeline.comfortLine)}{' '}
-                <span className="liability" style={{ fontWeight: 500 }}>
-                  {safeGeo.comfortPct}% · 差 {formatPlain(safeGeo.comfortGap)}
-                </span>
-              </span>
-            </div>
-          </section>
-
-          <section className="card desktop-only">
-            <div className="card__header">
-              <h2 className="h2">投資</h2>
-              <span className="micro assets__note">
-                市值快照 {data.investment.snapshotDate} · 不做即時行情
-              </span>
-            </div>
-            <div className="assets__invest-grid">
-              <div>
-                <div className="micro assets__metric-label">累計淨投入</div>
-                <div className="mono assets__metric-num">
-                  {formatPlain(data.investment.netInvested)}
-                </div>
-              </div>
-              <div>
-                <div className="micro assets__metric-label">估計市值</div>
-                <div className="mono assets__metric-num">
-                  {formatPlain(data.investment.marketValue)}
-                </div>
-              </div>
-              <div>
-                <div className="micro assets__metric-label">未實現損益</div>
-                <div className={`mono assets__metric-num ${gainNegative ? 'liability' : 'income'}`}>
-                  {formatSigned(data.investment.unrealizedGain)}
-                </div>
-              </div>
-              <div>
-                <div className="micro assets__metric-label">累計股息</div>
-                <div className="mono assets__metric-num">
-                  {formatPlain(data.investment.dividendTotal)}
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        {/* 月結更新 — snapshot input forms */}
+        {/* 負債 / 緊急預備金 */}
         <section className="card span-6">
           <div className="card__header">
+            <h2 className="h2">負債</h2>
+            <span style={{ fontSize: 13 }}>
+              合計{' '}
+              <span className="mono liability" style={{ fontWeight: 600 }}>
+                {formatLiability(data.liabilityTotal)}
+              </span>
+            </span>
+          </div>
+          <div className="row-list">
+            {data.liabilities.length === 0 && (
+              <div className="caption assets__empty-note">尚無負債快照。</div>
+            )}
+            {data.liabilities.map((liability) => (
+              <div key={liability.name} className="list-row">
+                <span>
+                  {liability.name}
+                  {liability.detail && (
+                    <span className="micro assets__date-note"> {liability.detail}</span>
+                  )}
+                </span>
+                <span className="amount-s liability">{formatLiability(liability.remaining)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="micro" style={{ color: 'var(--color-ink-40)', letterSpacing: 0 }}>
+            淨資產以剩餘本金計算，月付金額僅供現金流預估
+          </div>
+        </section>
+
+        <section className="card span-6">
+          <div className="card__header">
+            <h2 className="h2">緊急預備金</h2>
+            <span className="micro assets__note">最後確認 {data.safeline.confirmedAt}</span>
+          </div>
+          <WaterlineBar safeline={data.safeline} />
+          <div className="assets__safeline-inline">
+            <span>
+              第一線 {formatPlain(data.safeline.firstLine)}{' '}
+              <span style={{ color: 'var(--color-mint-deep)', fontWeight: 500 }}>
+                {safeGeo.firstLineMet ? '✓ 已達成' : ''}
+              </span>
+            </span>
+            <span>
+              安心線 {formatPlain(data.safeline.comfortLine)}{' '}
+              <span className="liability" style={{ fontWeight: 500 }}>
+                {safeGeo.comfortPct}% · 差 {formatPlain(safeGeo.comfortGap)}
+              </span>
+            </span>
+          </div>
+        </section>
+
+        {/* 投資摘要 */}
+        <section className="card span-12">
+          <div className="card__header">
+            <h2 className="h2">投資</h2>
+            <span className="micro assets__note">
+              市值快照 {data.investment.snapshotDate} · 不做即時行情
+            </span>
+          </div>
+          <div className="assets__invest-grid">
+            <div>
+              <div className="micro assets__metric-label">累計淨投入</div>
+              <div className="mono assets__metric-num">
+                {formatPlain(data.investment.netInvested)}
+              </div>
+            </div>
+            <div>
+              <div className="micro assets__metric-label">估計市值</div>
+              <div className="mono assets__metric-num">
+                {formatPlain(data.investment.marketValue)}
+              </div>
+            </div>
+            <div>
+              <div className="micro assets__metric-label">未實現損益</div>
+              <div
+                className={`mono assets__metric-num ${
+                  data.investment.unrealizedGain < 0 ? 'liability' : 'income'
+                }`}
+              >
+                {formatSigned(data.investment.unrealizedGain)}
+              </div>
+            </div>
+            <div>
+              <div className="micro assets__metric-label">累計股息</div>
+              <div className="mono assets__metric-num">
+                {formatPlain(data.investment.dividendTotal)}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 月結更新 */}
+        <div className="span-12 assets__section-label micro">月結更新</div>
+
+        <section className="card span-4">
+          <div className="card__header">
+            <h2 className="h2">新增帳戶</h2>
+          </div>
+          <form onSubmit={createAccount} className="form-grid">
+            <label className="form-field form-field--wide">
+              <span className="micro">名稱</span>
+              <input
+                className="text-input"
+                value={accountForm.name}
+                onChange={(event) => setAccountForm({ ...accountForm, name: event.target.value })}
+              />
+            </label>
+            <label className="form-field">
+              <span className="micro">類型</span>
+              <select
+                className="text-input"
+                value={accountForm.type}
+                onChange={(event) =>
+                  setAccountForm({ ...accountForm, type: event.target.value as AccountType })
+                }
+              >
+                {ACCOUNT_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
+              <span className="micro">備註（選填）</span>
+              <input
+                className="text-input"
+                value={accountForm.note}
+                onChange={(event) => setAccountForm({ ...accountForm, note: event.target.value })}
+              />
+            </label>
+            <div className="form-actions">
+              <button
+                type="submit"
+                className="btn btn--primary"
+                disabled={saving || !accountForm.name.trim()}
+              >
+                新增帳戶
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="card span-4">
+          <div className="card__header">
             <h2 className="h2">更新餘額快照</h2>
-            <span className="micro assets__note">月結時手動確認</span>
           </div>
           <form onSubmit={saveAssetSnapshot} className="form-grid">
+            {assetAccounts.length === 0 && (
+              <div className="caption assets__empty-note form-field--wide">
+                先新增現金／銀行／投資帳戶，才能儲存餘額快照。
+              </div>
+            )}
             <label className="form-field">
               <span className="micro">帳戶</span>
               <select
@@ -462,13 +569,11 @@ export default function AssetsPage() {
                 onChange={(event) => setAssetForm({ ...assetForm, accountId: event.target.value })}
               >
                 <option value="">選擇帳戶</option>
-                {accounts
-                  .filter((account) => account.type !== 'credit_card')
-                  .map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
+                {assetAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="form-field">
@@ -511,19 +616,27 @@ export default function AssetsPage() {
               />
             </label>
             <div className="form-actions">
-              <button type="submit" className="btn btn--primary" disabled={saving}>
+              <button
+                type="submit"
+                className="btn btn--primary"
+                disabled={saving || !assetForm.accountId || !assetForm.balance}
+              >
                 儲存快照
               </button>
             </div>
           </form>
         </section>
 
-        <section className="card span-6">
+        <section className="card span-4">
           <div className="card__header">
             <h2 className="h2">更新負債快照</h2>
-            <span className="micro assets__note">卡費、分期剩餘本金</span>
           </div>
           <form onSubmit={saveDebtSnapshot} className="form-grid">
+            {creditAccounts.length === 0 && (
+              <div className="caption assets__empty-note form-field--wide">
+                新增信用卡帳戶可自動連結卡費；或直接填名稱記錄未連結的負債。
+              </div>
+            )}
             <label className="form-field">
               <span className="micro">連結帳戶（選填）</span>
               <select
@@ -532,13 +645,11 @@ export default function AssetsPage() {
                 onChange={(event) => setDebtForm({ ...debtForm, accountId: event.target.value })}
               >
                 <option value="">不連結帳戶</option>
-                {accounts
-                  .filter((account) => account.type === 'credit_card')
-                  .map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
+                {creditAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="form-field">
@@ -581,7 +692,11 @@ export default function AssetsPage() {
               />
             </label>
             <div className="form-actions">
-              <button type="submit" className="btn btn--primary" disabled={saving}>
+              <button
+                type="submit"
+                className="btn btn--primary"
+                disabled={saving || !debtForm.name.trim() || !debtForm.remainingBalance}
+              >
                 儲存負債
               </button>
             </div>

@@ -161,6 +161,20 @@
   padding: 9px 0;
 }
 
+.assets__message {
+  padding: 8px 12px;
+  border-radius: var(--radius-badge);
+  background: var(--color-mint-tint);
+  border: 1px solid var(--color-mint-border);
+  color: var(--color-mint-deeper);
+}
+
+.assets__section-label {
+  padding-top: 8px;
+  letter-spacing: 0.1em;
+  color: var(--color-ink-40);
+}
+
 .assets__invest-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

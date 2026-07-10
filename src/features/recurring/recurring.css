@@ -1,0 +1,30 @@
+/* Fixed costs page specifics. */
+.fc-note {
+  letter-spacing: 0;
+}
+.fc-table {
+  overflow-x: auto;
+}
+.fc-grid {
+  grid-template-columns: minmax(180px, 1.4fr) 72px minmax(120px, 1fr) 110px 92px 48px auto;
+  min-width: 720px;
+}
+.fc-confidence {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: var(--type-micro-size);
+  font-weight: 500;
+}
+.fc-confidence--high {
+  background: var(--color-mint-tint);
+  color: var(--color-mint-deep);
+}
+.fc-confidence--medium {
+  background: var(--color-panel);
+  color: var(--color-ink-60);
+}
+.fc-rules {
+  line-height: 1.7;
+}

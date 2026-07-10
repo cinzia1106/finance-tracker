@@ -3,8 +3,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAdapter } from '../../data/AdapterContext';
+import { summarizeAutomation } from '../../data/transactionAutomation';
 import type { Transaction } from '../../types/models';
-import { EmptyState } from '../../components/ui';
+import { AutomationStrip, EmptyState } from '../../components/ui';
 import { formatPlain, formatSigned } from '../../lib/format';
 import './transactions.css';
 
@@ -98,6 +99,11 @@ export default function TransactionsPage() {
     return [...groups.entries()];
   }, [filtered]);
 
+  const automationSummary = useMemo(
+    () => summarizeAutomation(transactions ?? []),
+    [transactions],
+  );
+
   function shiftMonth(delta: number) {
     const d = new Date(year, month - 1 + delta, 1);
     setYear(d.getFullYear());
@@ -160,6 +166,10 @@ export default function TransactionsPage() {
           </EmptyState>
         ) : (
           <>
+            <div className="span-12">
+              <AutomationStrip summary={automationSummary} />
+            </div>
+
             {/* Desktop: dense table */}
             <section className="card span-12 desktop-only">
               <div className="tx-table">

@@ -341,6 +341,28 @@ p {
   font-weight: 600;
 }
 
+/* --- Automation summary strip --- */
+.automation-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-radius: var(--radius-badge);
+  background: var(--color-panel);
+}
+.automation-strip__label {
+  letter-spacing: 0.06em;
+}
+.automation-strip__item .mono {
+  font-weight: 500;
+  color: var(--color-ink);
+}
+.automation-strip__item--warn,
+.automation-strip__item--warn .mono {
+  color: var(--color-apricot-deep);
+}
+
 /* --- Form grid (snapshot / settings forms) --- */
 .form-grid {
   display: grid;
