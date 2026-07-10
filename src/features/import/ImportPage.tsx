@@ -9,6 +9,12 @@ import {
   previewCsvImport,
   type ConfirmedImportResult,
 } from './importWorkflow';
+import {
+  convertCtbcDepositPdf,
+  convertPostOfficeCsv,
+  type StatementConversionResult,
+  type StatementSource,
+} from './statementConverter';
 import './import.css';
 
 declare global {
@@ -32,6 +38,12 @@ const BATCH_STATUS_LABELS: Record<ImportBatch['status'], string> = {
   processing: '處理中',
   completed: '已完成',
   failed: '失敗',
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  expense: '支出',
+  income: '收入',
+  transfer: '轉帳',
 };
 
 function statusClass(status: ImportPreviewRow['status']) {
@@ -66,11 +78,16 @@ function resultSummary(result: ConfirmedImportResult) {
 export default function ImportPage() {
   const adapter = useAdapter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const converterInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [statementSource, setStatementSource] = useState<StatementSource>('post-office-csv');
+  const [statementAccount, setStatementAccount] = useState('');
+  const [conversion, setConversion] = useState<StatementConversionResult | null>(null);
+  const [conversionFileName, setConversionFileName] = useState<string | null>(null);
 
   const rowsToImport = useMemo(() => importableRows(preview), [preview]);
 
@@ -132,6 +149,47 @@ export default function ImportPage() {
     }
   }
 
+  async function convertStatementFile(file: File) {
+    setBusy(true);
+    setError(null);
+    setConversion(null);
+    setConversionFileName(null);
+    try {
+      const accountName =
+        statementAccount.trim() ||
+        (statementSource === 'post-office-csv' ? '郵局' : '中信 Deposit');
+      const result =
+        statementSource === 'post-office-csv'
+          ? convertPostOfficeCsv(await file.text(), accountName)
+          : await convertCtbcDepositPdf(file, accountName);
+      setConversion(result);
+      setConversionFileName(file.name.replace(/\.[^.]+$/, '-standard.csv'));
+      setPreview(await previewCsvImport(adapter, result.csvText));
+      setFileName(file.name.replace(/\.[^.]+$/, '-standard.csv'));
+      if (result.rows.length === 0) {
+        setError('轉檔沒有辨識到任何交易。請確認來源格式是否選對，或先下載銀行明細的 CSV/文字型 PDF。');
+      }
+    } catch (err) {
+      setPreview(null);
+      setConversion(null);
+      setConversionFileName(null);
+      setError(getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function downloadConvertedCsv() {
+    if (!conversion) return;
+    const blob = new Blob([conversion.csvText], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = conversionFileName ?? 'statement-standard.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function confirmImport() {
     if (!preview || rowsToImport.length === 0 || !adapter.createImportBatch) return;
 
@@ -184,7 +242,7 @@ export default function ImportPage() {
       </header>
 
       <div className="grid-12">
-        <section className="card span-5">
+        <section className="card span-6">
           <div className="card__header">
             <h2 className="h2">上傳 CSV</h2>
             <span className="micro import-card-note">清理後的標準格式</span>
@@ -220,7 +278,99 @@ export default function ImportPage() {
           </div>
         </section>
 
-        <section className="card span-7">
+        <section className="card span-6">
+          <div className="card__header">
+            <h2 className="h2">帳單轉檔</h2>
+            <span className="micro import-card-note">銀行帳單 → 標準 CSV</span>
+          </div>
+          <div className="form-grid">
+            <label className="form-field">
+              <span className="micro">來源格式</span>
+              <select
+                className="text-input"
+                value={statementSource}
+                onChange={(event) => {
+                  setStatementSource(event.target.value as StatementSource);
+                  setConversion(null);
+                  setConversionFileName(null);
+                }}
+              >
+                <option value="post-office-csv">郵局 CSV</option>
+                <option value="ctbc-deposit-pdf">中信存款 PDF</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span className="micro">帳戶名稱</span>
+              <input
+                className="text-input"
+                value={statementAccount}
+                onChange={(event) => setStatementAccount(event.target.value)}
+                placeholder={statementSource === 'post-office-csv' ? '郵局' : '中信 Deposit'}
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            className="import-dropzone"
+            onClick={() => converterInputRef.current?.click()}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              const file = event.dataTransfer.files[0];
+              if (file) void convertStatementFile(file);
+            }}
+            disabled={busy}
+          >
+            <span className="mono import-schema">
+              {statementSource === 'post-office-csv' ? '.csv' : '.pdf'} → date,type,amount,category,account,to_account,note
+            </span>
+            <span className="caption">拖放帳單檔案到這裡，或點擊選擇檔案</span>
+          </button>
+          <input
+            ref={converterInputRef}
+            type="file"
+            accept={statementSource === 'post-office-csv' ? '.csv,text/csv' : '.pdf,application/pdf'}
+            className="import-file-input"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void convertStatementFile(file);
+            }}
+          />
+          {conversion && (
+            <div className="row-list import-converter-result">
+              <div className="list-row">
+                <span>轉換筆數</span>
+                <span className="mono">{conversion.rows.length}</span>
+              </div>
+              <div className="list-row">
+                <span>待確認</span>
+                <span className="mono">
+                  {conversion.rows.filter((row) => row.confidence === 'review').length}
+                </span>
+              </div>
+              {conversion.warnings.map((warning) => (
+                <div key={warning} className="caption import-row-note">
+                  {warning}
+                </div>
+              ))}
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={downloadConvertedCsv}
+                  disabled={conversion.rows.length === 0}
+                >
+                  下載標準 CSV
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="caption import-rules-note">
+            自動判斷提款、轉帳、股利、證券款；不確定項目會加上 needs_review 標記，仍需在右側預覽後才匯入。
+          </div>
+        </section>
+
+        <section className="card span-12">
           <div className="card__header">
             <h2 className="h2">驗證預覽</h2>
             <button
@@ -279,12 +429,12 @@ export default function ImportPage() {
                   <div key={`${row.rowNumber}-${row.dedupeKey}`} className="data-table__row import-table__grid">
                     <span className="mono caption">{row.rowNumber}</span>
                     <span className="mono">{row.record.date}</span>
-                    <span>{row.record.type}</span>
-                    <span className="cell-ellipsis">{row.record.category || '-'}</span>
+                    <span>{TYPE_LABELS[row.record.type] ?? row.record.type}</span>
+                    <span className="cell-ellipsis">{row.record.category || '—'}</span>
                     <span className="cell-ellipsis">
                       {row.record.to_account
-                        ? `${row.record.account} -> ${row.record.to_account}`
-                        : row.record.account || '-'}
+                        ? `${row.record.account} → ${row.record.to_account}`
+                        : row.record.account || '—'}
                     </span>
                     <span className="mono cell-right">{formatSigned(Number(row.record.amount) || 0)}</span>
                     <span>

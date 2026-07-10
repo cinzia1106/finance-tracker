@@ -180,6 +180,9 @@ function validateRecord(record: CsvRecord, columnCount: number) {
   if (!record.note) {
     warnings.push('note is blank.');
   }
+  if (/needs[_\s-]?review/i.test(`${record.category} ${record.note}`)) {
+    warnings.push('row is marked as needs_review.');
+  }
 
   return { errors, warnings };
 }
