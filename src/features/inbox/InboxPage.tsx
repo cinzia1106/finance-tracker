@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAdapter } from '../../data/AdapterContext';
 import { CATEGORY_DEFINITIONS, tagsForCategory } from '../../data/categoryDefinitions';
-import type { Transaction } from '../../types/models';
+import type { Account, Transaction, TransactionType } from '../../types/models';
 import { EmptyState } from '../../components/ui';
 import { formatPlain, formatSigned } from '../../lib/format';
 import './inbox.css';
@@ -14,6 +14,7 @@ import './inbox.css';
 export default function InboxPage() {
   const adapter = useAdapter();
   const [items, setItems] = useState<Transaction[] | null>(null);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -22,13 +23,21 @@ export default function InboxPage() {
 
   useEffect(() => {
     let cancelled = false;
-    adapter
-      .listTransactions?.()
-      .then((rows) => {
-        if (!cancelled) setItems(rows.filter((tx) => tx.status === 'needs_review'));
+    Promise.all([
+      adapter.listTransactions?.() ?? Promise.resolve([]),
+      adapter.listAccounts?.() ?? Promise.resolve([]),
+    ])
+      .then(([rows, accountRows]) => {
+        if (!cancelled) {
+          setItems(rows.filter((tx) => tx.status === 'needs_review'));
+          setAccounts(accountRows.filter((account) => account.active !== false));
+        }
       })
       .catch(() => {
-        if (!cancelled) setItems([]);
+        if (!cancelled) {
+          setItems([]);
+          setAccounts([]);
+        }
       });
     return () => {
       cancelled = true;
@@ -40,6 +49,16 @@ export default function InboxPage() {
     [items, skipped],
   );
 
+  const accountNames = useMemo(
+    () => accounts.map((account) => account.name),
+    [accounts],
+  );
+
+  function defaultCategoryForType(type: TransactionType) {
+    if (type === 'transfer') return '轉帳';
+    return CATEGORY_DEFINITIONS.find((category) => category.kind === type)?.name ?? '其他';
+  }
+
   async function confirmMany(ids: string[]) {
     if (!adapter.updateTransaction || ids.length === 0) return;
     setBusy(true);
@@ -47,6 +66,15 @@ export default function InboxPage() {
     const done: string[] = [];
     try {
       for (const id of ids) {
+        const tx = items?.find((item) => item.id === id);
+        if (tx?.type === 'transfer') {
+          if (!tx.account || !tx.toAccount) {
+            throw new Error('轉帳交易需選擇轉出與轉入帳戶。');
+          }
+          if (tx.account === tx.toAccount) {
+            throw new Error('轉帳交易的轉出與轉入帳戶不可相同。');
+          }
+        }
         await adapter.updateTransaction(id, { status: 'confirmed' });
         done.push(id);
       }
@@ -75,6 +103,46 @@ export default function InboxPage() {
     );
     if (tx.category && !names.includes(tx.category)) names.unshift(tx.category);
     return names;
+  }
+
+  async function changeType(tx: Transaction, type: TransactionType) {
+    if (!adapter.updateTransaction || type === tx.type) return;
+    const category = defaultCategoryForType(type);
+    const patch: Partial<Transaction> = {
+      type,
+      category,
+      tags: [],
+      toAccount: type === 'transfer' ? tx.toAccount : undefined,
+      toAccountId: type === 'transfer' ? tx.toAccountId : null,
+    };
+    setSavingId(tx.id);
+    setError(null);
+    try {
+      await adapter.updateTransaction(tx.id, patch);
+      patchLocal(tx.id, patch);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '類型更新失敗。');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function changeAccount(tx: Transaction, field: 'account' | 'toAccount', value: string) {
+    if (!adapter.updateTransaction) return;
+    const patch: Partial<Transaction> =
+      field === 'account'
+        ? { account: value, accountId: accounts.find((account) => account.name === value)?.id }
+        : { toAccount: value || undefined, toAccountId: accounts.find((account) => account.name === value)?.id ?? null };
+    setSavingId(tx.id);
+    setError(null);
+    try {
+      await adapter.updateTransaction(tx.id, patch);
+      patchLocal(tx.id, patch);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '帳戶更新失敗。');
+    } finally {
+      setSavingId(null);
+    }
   }
 
   function tagOptions(tx: Transaction) {
@@ -239,6 +307,17 @@ export default function InboxPage() {
                 </span>
                 <span className="inbox-row__badges">
                   <select
+                    className="text-input inbox-row__type"
+                    value={tx.type}
+                    disabled={busy || savingId === tx.id}
+                    onChange={(event) => void changeType(tx, event.target.value as TransactionType)}
+                    aria-label="類型"
+                  >
+                    <option value="expense">支出</option>
+                    <option value="income">收入</option>
+                    <option value="transfer">轉帳</option>
+                  </select>
+                  <select
                     className="text-input inbox-row__category"
                     value={tx.category}
                     disabled={busy || savingId === tx.id}
@@ -251,6 +330,39 @@ export default function InboxPage() {
                       </option>
                     ))}
                   </select>
+                  {tx.type === 'transfer' && (
+                    <span className="inbox-row__transfer">
+                      <select
+                        className="text-input inbox-row__account"
+                        value={tx.account}
+                        disabled={busy || savingId === tx.id}
+                        onChange={(event) => void changeAccount(tx, 'account', event.target.value)}
+                        aria-label="轉出帳戶"
+                      >
+                        <option value="">轉出帳戶</option>
+                        {accountNames.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="caption">→</span>
+                      <select
+                        className="text-input inbox-row__account"
+                        value={tx.toAccount ?? ''}
+                        disabled={busy || savingId === tx.id}
+                        onChange={(event) => void changeAccount(tx, 'toAccount', event.target.value)}
+                        aria-label="轉入帳戶"
+                      >
+                        <option value="">轉入帳戶</option>
+                        {accountNames.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </span>
+                  )}
                   {tagOptions(tx).length > 0 && (
                     <span className="inbox-row__tags">
                       {tagOptions(tx).map((tag) => (

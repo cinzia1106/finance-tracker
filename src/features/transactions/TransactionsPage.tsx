@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAdapter } from '../../data/AdapterContext';
 import { CATEGORY_DEFINITIONS, tagsForCategory } from '../../data/categoryDefinitions';
 import { summarizeAutomation } from '../../data/transactionAutomation';
-import type { Transaction } from '../../types/models';
+import type { Account, Transaction, TransactionType } from '../../types/models';
 import { AutomationStrip, EmptyState } from '../../components/ui';
 import { formatPlain, formatSigned } from '../../lib/format';
 import './transactions.css';
@@ -18,6 +18,20 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'needs_review', label: '待確認' },
   { key: 'transfer', label: '轉帳' },
 ];
+
+const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
+  { value: 'expense', label: '支出' },
+  { value: 'income', label: '收入' },
+  { value: 'transfer', label: '轉帳' },
+];
+
+/** Spec-compatible fallback category when the type changes. */
+function fallbackCategory(type: TransactionType, current: string) {
+  if (type === 'transfer') return '轉帳';
+  const valid = CATEGORY_DEFINITIONS.some((c) => c.kind === type && c.name === current);
+  if (valid) return current;
+  return type === 'income' ? '其他收入' : '其他';
+}
 
 /** Display amount per spec: expense negative, income positive, transfer plain.
     Negative stored amounts (refunds/corrections) flip sign automatically. */
@@ -65,6 +79,22 @@ export default function TransactionsPage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [noteEditId, setNoteEditId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [transferEditId, setTransferEditId] = useState<string | null>(null);
+  const [transferDraft, setTransferDraft] = useState({ from: '', to: '' });
+
+  useEffect(() => {
+    let cancelled = false;
+    adapter
+      .listAccounts?.()
+      .then((rows) => {
+        if (!cancelled) setAccounts(rows.filter((a) => a.active !== false));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [adapter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,6 +201,79 @@ export default function TransactionsPage() {
       patchLocal(tx.id, { tags });
     } catch (err) {
       setEditError(err instanceof Error ? err.message : '標籤更新失敗，請稍後再試。');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  /** Type change: expense↔income saves directly (category falls back per
+      spec); switching to transfer opens the account editor first because
+      a transfer must name its destination account. */
+  function onTypeChange(tx: Transaction, nextType: TransactionType) {
+    if (nextType === tx.type) return;
+    if (nextType === 'transfer') {
+      if (tx.amount < 0) {
+        setEditError('負數金額（退款／沖回）不可改為轉帳。');
+        return;
+      }
+      setTransferDraft({ from: tx.account, to: tx.toAccount ?? '' });
+      setTransferEditId(tx.id);
+      return;
+    }
+    void applyEdit(
+      tx,
+      {
+        type: nextType,
+        category: fallbackCategory(nextType, tx.category),
+        toAccount: '',
+        toAccountId: null,
+      },
+      '類型更新失敗，請稍後再試。',
+    );
+  }
+
+  function openTransferEditor(tx: Transaction) {
+    setTransferDraft({ from: tx.account, to: tx.toAccount ?? '' });
+    setTransferEditId(tx.id);
+  }
+
+  async function saveTransfer(tx: Transaction) {
+    const from = transferDraft.from.trim();
+    const to = transferDraft.to.trim();
+    if (!from || !to) {
+      setEditError('轉帳需要轉出與轉入帳戶。');
+      return;
+    }
+    if (from === to) {
+      setEditError('轉出與轉入帳戶不可相同。');
+      return;
+    }
+    const fromId = accounts.find((a) => a.name === from)?.id;
+    const toId = accounts.find((a) => a.name === to)?.id;
+    await applyEdit(
+      tx,
+      {
+        type: 'transfer',
+        category: '轉帳',
+        account: from,
+        accountId: fromId,
+        toAccount: to,
+        toAccountId: toId ?? null,
+      },
+      '轉帳更新失敗，請稍後再試。',
+    );
+    setTransferEditId(null);
+  }
+
+  async function applyEdit(tx: Transaction, patch: Partial<Transaction>, errorMessage: string) {
+    if (!adapter.updateTransaction) return;
+    setSavingId(tx.id);
+    setEditError(null);
+    try {
+      await adapter.updateTransaction(tx.id, patch);
+      patchLocal(tx.id, patch);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : errorMessage);
     } finally {
       setSavingId(null);
     }
@@ -353,14 +456,30 @@ export default function TransactionsPage() {
                 // Ledger style: print the date once per day group
                 const dayStart = index === 0 || filtered[index - 1].date !== tx.date;
                 return (
+                <div key={tx.id} style={{ display: 'contents' }}>
                 <div
-                  key={tx.id}
                   className={`data-table__row tx-grid${rowStateClass(tx)}${
                     dayStart && index > 0 ? ' tx-row--day-start' : ''
                   }`}
                 >
                   <span className="mono caption">{dayStart ? tx.date.slice(5) : ''}</span>
-                  <span>{tx.type === 'expense' ? '支出' : tx.type === 'income' ? '收入' : '轉帳'}</span>
+                  <span>
+                    <select
+                      className="tx-cat-select"
+                      value={tx.type}
+                      disabled={savingId === tx.id}
+                      onChange={(event) =>
+                        onTypeChange(tx, event.target.value as TransactionType)
+                      }
+                      aria-label="編輯類型"
+                    >
+                      {TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
                   <span>
                     {tx.type === 'transfer' ? (
                       tx.category || '—'
@@ -387,6 +506,16 @@ export default function TransactionsPage() {
                     title={tx.toAccount ? `${tx.account} → ${tx.toAccount}` : tx.account}
                   >
                     {tx.toAccount ? `${tx.account} → ${tx.toAccount}` : tx.account}
+                    {tx.type === 'transfer' && (
+                      <button
+                        type="button"
+                        className="tx-subtag tx-subtag--edit tx-account-edit"
+                        disabled={savingId === tx.id}
+                        onClick={() => openTransferEditor(tx)}
+                      >
+                        改帳戶
+                      </button>
+                    )}
                   </span>
                   <span className={`cell-right ${amountClass(tx)}`}>{displayAmount(tx)}</span>
                   {tx.type === 'transfer' ? (
@@ -396,6 +525,61 @@ export default function TransactionsPage() {
                   ) : (
                     <span className="status-text--confirmed">已確認</span>
                   )}
+                </div>
+                {transferEditId === tx.id && (
+                  <div className="tx-transfer-editor">
+                    <span className="micro tx-transfer-editor__label">轉帳帳戶</span>
+                    <select
+                      className="text-input"
+                      value={transferDraft.from}
+                      onChange={(event) =>
+                        setTransferDraft({ ...transferDraft, from: event.target.value })
+                      }
+                      aria-label="轉出帳戶"
+                    >
+                      {[transferDraft.from, ...accounts.map((a) => a.name)]
+                        .filter((name, i, list) => name && list.indexOf(name) === i)
+                        .map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                    </select>
+                    <span className="caption">→</span>
+                    <select
+                      className="text-input"
+                      value={transferDraft.to}
+                      onChange={(event) =>
+                        setTransferDraft({ ...transferDraft, to: event.target.value })
+                      }
+                      aria-label="轉入帳戶"
+                    >
+                      <option value="">選擇轉入帳戶</option>
+                      {accounts
+                        .filter((a) => a.name !== transferDraft.from)
+                        .map((a) => (
+                          <option key={a.name} value={a.name}>
+                            {a.name}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--sm"
+                      disabled={savingId === tx.id || !transferDraft.to}
+                      onClick={() => void saveTransfer(tx)}
+                    >
+                      確認
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => setTransferEditId(null)}
+                    >
+                      取消
+                    </button>
+                  </div>
+                )}
                 </div>
                 );
               })}

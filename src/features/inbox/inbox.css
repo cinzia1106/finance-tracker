@@ -100,6 +100,21 @@
   min-height: 30px;
   padding: 4px 8px;
 }
+.inbox-row__type {
+  width: 86px;
+  min-height: 30px;
+  padding: 4px 8px;
+}
+.inbox-row__transfer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.inbox-row__account {
+  width: 132px;
+  min-height: 30px;
+  padding: 4px 8px;
+}
 .inbox-row__tags {
   display: inline-flex;
   flex-wrap: wrap;
@@ -161,6 +176,15 @@
   }
   .inbox-row__category {
     width: 120px;
+  }
+  .inbox-row__type {
+    width: 88px;
+  }
+  .inbox-row__account {
+    width: 120px;
+  }
+  .inbox-row__transfer {
+    flex-wrap: wrap;
   }
   .inbox-row__amount {
     grid-area: amount;
