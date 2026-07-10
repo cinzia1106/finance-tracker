@@ -115,6 +115,7 @@ export interface AccountBalanceRow {
   name: string;
   detail?: string; // e.g. 薪轉 · 預備金
   accountType: AccountType;
+  currency: string;
   typeLabel: string; // 銀行 / 現金 / 投資 / 信用卡
   balance: number | null; // null = 待更新, excluded from net worth
   isLiability: boolean;

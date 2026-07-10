@@ -23,6 +23,31 @@ const ACCOUNT_TYPES: Array<{ value: AccountType; label: string }> = [
   { value: 'virtual', label: '投資／虛擬' },
 ];
 
+const CURRENCIES = ['TWD', 'USD', 'JPY', 'EUR', 'CNY', 'HKD'] as const;
+const DEFAULT_CURRENCY = 'TWD';
+const CURRENCY_NOTE_RE = /\[currency:([A-Z]{3})\]/i;
+
+function accountCurrency(account: Account | undefined) {
+  const match = account?.note?.match(CURRENCY_NOTE_RE);
+  return (match?.[1] ?? DEFAULT_CURRENCY).toUpperCase();
+}
+
+function accountNote(account: Account | undefined) {
+  return account?.note?.replace(CURRENCY_NOTE_RE, '').trim() ?? '';
+}
+
+function noteWithCurrency(note: string, currency: string) {
+  const cleanNote = note.replace(CURRENCY_NOTE_RE, '').trim();
+  if (currency === DEFAULT_CURRENCY) return cleanNote || undefined;
+  return `${cleanNote ? `${cleanNote} ` : ''}[currency:${currency}]`;
+}
+
+function convertToTwd(value: string, rate: string) {
+  const amount = Number(value);
+  const exchangeRate = Number(rate || '1');
+  return Math.round(amount * exchangeRate);
+}
+
 export default function AssetsPage() {
   const adapter = useAdapter();
   const [data, setData] = useState<AssetOverview | null>(null);
@@ -33,12 +58,22 @@ export default function AssetsPage() {
   const [accountForm, setAccountForm] = useState({
     name: '',
     type: 'bank' as AccountType,
+    currency: DEFAULT_CURRENCY,
     note: '',
+  });
+  const [accountEditForm, setAccountEditForm] = useState({
+    id: '',
+    name: '',
+    type: 'bank' as AccountType,
+    currency: DEFAULT_CURRENCY,
+    note: '',
+    active: true,
   });
   const [assetForm, setAssetForm] = useState({
     accountId: '',
     date: new Date().toISOString().slice(0, 10),
     balance: '',
+    exchangeRate: '1',
     marketValue: '',
     costBasis: '',
   });
@@ -95,10 +130,10 @@ export default function AssetsPage() {
       const account = await adapter.createAccount({
         name: accountForm.name.trim(),
         type: accountForm.type,
-        note: accountForm.note.trim() || undefined,
+        note: noteWithCurrency(accountForm.note, accountForm.currency),
         active: true,
       });
-      setAccountForm({ name: '', type: 'bank', note: '' });
+      setAccountForm({ name: '', type: 'bank', currency: DEFAULT_CURRENCY, note: '' });
       if (account.type === 'credit_card') {
         setDebtForm((current) => ({
           ...current,
@@ -117,19 +152,67 @@ export default function AssetsPage() {
     }
   }
 
+  function selectAccountForEdit(accountId: string) {
+    const account = accounts.find((row) => row.id === accountId);
+    setAccountEditForm({
+      id: account?.id ?? '',
+      name: account?.name ?? '',
+      type: account?.type ?? 'bank',
+      currency: accountCurrency(account),
+      note: accountNote(account),
+      active: account?.active ?? true,
+    });
+  }
+
+  async function updateAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!adapter.updateAccount || !accountEditForm.id || !accountEditForm.name.trim()) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      const updated = await adapter.updateAccount(accountEditForm.id, {
+        name: accountEditForm.name.trim(),
+        type: accountEditForm.type,
+        note: noteWithCurrency(accountEditForm.note, accountEditForm.currency),
+        active: accountEditForm.active,
+      });
+      setAccountEditForm({
+        id: updated.id ?? '',
+        name: updated.name,
+        type: updated.type,
+        currency: accountCurrency(updated),
+        note: accountNote(updated),
+        active: updated.active ?? true,
+      });
+      setMessage('帳戶已更新。');
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '無法更新帳戶。');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveAssetSnapshot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!adapter.createAssetSnapshot || !assetForm.accountId || !assetForm.balance) return;
+    const currency = accountCurrency(accounts.find((account) => account.id === assetForm.accountId));
+    const exchangeRate = Number(assetForm.exchangeRate || '1');
+    if (currency !== DEFAULT_CURRENCY && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
+      setMessage('外幣帳戶需填寫有效的 TWD 匯率。');
+      return;
+    }
     setSaving(true);
     setMessage(null);
     try {
       await adapter.createAssetSnapshot({
         accountId: assetForm.accountId,
         date: assetForm.date,
-        balance: Number(assetForm.balance),
-        marketValue: assetForm.marketValue ? Number(assetForm.marketValue) : null,
-        costBasis: assetForm.costBasis ? Number(assetForm.costBasis) : null,
+        balance: convertToTwd(assetForm.balance, assetForm.exchangeRate),
+        marketValue: assetForm.marketValue ? convertToTwd(assetForm.marketValue, assetForm.exchangeRate) : null,
+        costBasis: assetForm.costBasis ? convertToTwd(assetForm.costBasis, assetForm.exchangeRate) : null,
         source: 'manual_check',
+        note: currency === DEFAULT_CURRENCY ? undefined : `${currency} x ${exchangeRate}`,
       });
       setAssetForm((current) => ({ ...current, balance: '', marketValue: '', costBasis: '' }));
       setMessage('快照已儲存。');
@@ -181,6 +264,8 @@ export default function AssetsPage() {
   const assetAccounts = accounts.filter((account) => account.type !== 'credit_card');
   const creditAccounts = accounts.filter((account) => account.type === 'credit_card');
   const hasAccounts = accounts.length > 0;
+  const selectedAssetAccount = accounts.find((account) => account.id === assetForm.accountId);
+  const selectedAssetCurrency = accountCurrency(selectedAssetAccount);
 
   return (
     <>
@@ -188,7 +273,7 @@ export default function AssetsPage() {
         <div className="page-header__lead">
           <h1 className="h1">資產</h1>
           <span className="caption assets__header-note">
-            以最後確認快照計算，非即時餘額
+            帳戶、投資與負債的目前狀態 · 以最後確認快照計算，非即時餘額
           </span>
         </div>
       </header>
@@ -359,7 +444,10 @@ export default function AssetsPage() {
                     <span className="badge--stale badge assets__stale-badge">待更新</span>
                   )}
                 </span>
-                <span style={{ color: 'var(--color-ink-70)' }}>{account.typeLabel}</span>
+                <span style={{ color: 'var(--color-ink-70)' }}>
+                  {account.typeLabel}
+                  {account.currency !== DEFAULT_CURRENCY ? ` · ${account.currency}` : ''}
+                </span>
                 <span
                   className={`mono cell-right${account.isLiability ? ' liability' : ''}`}
                   style={{ fontWeight: 500 }}
@@ -382,7 +470,11 @@ export default function AssetsPage() {
               <div key={account.name} className="list-row">
                 <span>
                   {account.name}
-                  <span className="micro assets__date-note"> {account.typeLabel}</span>
+                  <span className="micro assets__date-note">
+                    {' '}
+                    {account.typeLabel}
+                    {account.currency !== DEFAULT_CURRENCY ? ` · ${account.currency}` : ''}
+                  </span>
                   {account.stale && (
                     <span className="badge--stale badge assets__stale-badge">待更新</span>
                   )}
@@ -532,6 +624,22 @@ export default function AssetsPage() {
               </select>
             </label>
             <label className="form-field">
+              <span className="micro">幣別</span>
+              <select
+                className="text-input"
+                value={accountForm.currency}
+                onChange={(event) =>
+                  setAccountForm({ ...accountForm, currency: event.target.value })
+                }
+              >
+                {CURRENCIES.map((currency) => (
+                  <option key={currency} value={currency}>
+                    {currency}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
               <span className="micro">備註（選填）</span>
               <input
                 className="text-input"
@@ -553,6 +661,112 @@ export default function AssetsPage() {
 
         <section className="card span-4">
           <div className="card__header">
+            <h2 className="h2">編輯帳戶</h2>
+          </div>
+          <form onSubmit={updateAccount} className="form-grid">
+            <label className="form-field form-field--wide">
+              <span className="micro">選擇帳戶</span>
+              <select
+                className="text-input"
+                value={accountEditForm.id}
+                onChange={(event) => selectAccountForEdit(event.target.value)}
+              >
+                <option value="">選擇帳戶</option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                    {accountCurrency(account) !== DEFAULT_CURRENCY ? ` · ${accountCurrency(account)}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field form-field--wide">
+              <span className="micro">名稱</span>
+              <input
+                className="text-input"
+                value={accountEditForm.name}
+                onChange={(event) =>
+                  setAccountEditForm({ ...accountEditForm, name: event.target.value })
+                }
+                disabled={!accountEditForm.id}
+              />
+            </label>
+            <label className="form-field">
+              <span className="micro">類型</span>
+              <select
+                className="text-input"
+                value={accountEditForm.type}
+                onChange={(event) =>
+                  setAccountEditForm({
+                    ...accountEditForm,
+                    type: event.target.value as AccountType,
+                  })
+                }
+                disabled={!accountEditForm.id}
+              >
+                {ACCOUNT_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
+              <span className="micro">幣別</span>
+              <select
+                className="text-input"
+                value={accountEditForm.currency}
+                onChange={(event) =>
+                  setAccountEditForm({ ...accountEditForm, currency: event.target.value })
+                }
+                disabled={!accountEditForm.id}
+              >
+                {CURRENCIES.map((currency) => (
+                  <option key={currency} value={currency}>
+                    {currency}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
+              <span className="micro">備註（選填）</span>
+              <input
+                className="text-input"
+                value={accountEditForm.note}
+                onChange={(event) =>
+                  setAccountEditForm({ ...accountEditForm, note: event.target.value })
+                }
+                disabled={!accountEditForm.id}
+              />
+            </label>
+            <label className="form-field">
+              <span className="micro">啟用</span>
+              <select
+                className="text-input"
+                value={accountEditForm.active ? 'true' : 'false'}
+                onChange={(event) =>
+                  setAccountEditForm({ ...accountEditForm, active: event.target.value === 'true' })
+                }
+                disabled={!accountEditForm.id}
+              >
+                <option value="true">啟用</option>
+                <option value="false">停用</option>
+              </select>
+            </label>
+            <div className="form-actions">
+              <button
+                type="submit"
+                className="btn btn--primary"
+                disabled={saving || !accountEditForm.id || !accountEditForm.name.trim()}
+              >
+                更新帳戶
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="card span-4">
+          <div className="card__header">
             <h2 className="h2">更新餘額快照</h2>
           </div>
           <form onSubmit={saveAssetSnapshot} className="form-grid">
@@ -566,12 +780,21 @@ export default function AssetsPage() {
               <select
                 className="text-input"
                 value={assetForm.accountId}
-                onChange={(event) => setAssetForm({ ...assetForm, accountId: event.target.value })}
+                onChange={(event) => {
+                  const nextAccount = accounts.find((account) => account.id === event.target.value);
+                  const nextCurrency = accountCurrency(nextAccount);
+                  setAssetForm({
+                    ...assetForm,
+                    accountId: event.target.value,
+                    exchangeRate: nextCurrency === DEFAULT_CURRENCY ? '1' : assetForm.exchangeRate,
+                  });
+                }}
               >
                 <option value="">選擇帳戶</option>
                 {assetAccounts.map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.name}
+                    {accountCurrency(account) !== DEFAULT_CURRENCY ? ` · ${accountCurrency(account)}` : ''}
                   </option>
                 ))}
               </select>
@@ -586,7 +809,7 @@ export default function AssetsPage() {
               />
             </label>
             <label className="form-field">
-              <span className="micro">餘額</span>
+              <span className="micro">餘額（{selectedAssetCurrency}）</span>
               <input
                 className="text-input mono"
                 type="number"
@@ -596,7 +819,20 @@ export default function AssetsPage() {
               />
             </label>
             <label className="form-field">
-              <span className="micro">市值（投資帳戶）</span>
+              <span className="micro">TWD 匯率</span>
+              <input
+                className="text-input mono"
+                type="number"
+                min="0"
+                step="0.0001"
+                placeholder="1"
+                value={assetForm.exchangeRate}
+                onChange={(event) => setAssetForm({ ...assetForm, exchangeRate: event.target.value })}
+                disabled={selectedAssetCurrency === DEFAULT_CURRENCY}
+              />
+            </label>
+            <label className="form-field">
+              <span className="micro">市值（{selectedAssetCurrency}，投資帳戶）</span>
               <input
                 className="text-input mono"
                 type="number"
@@ -606,7 +842,7 @@ export default function AssetsPage() {
               />
             </label>
             <label className="form-field">
-              <span className="micro">成本（投資帳戶）</span>
+              <span className="micro">成本（{selectedAssetCurrency}，投資帳戶）</span>
               <input
                 className="text-input mono"
                 type="number"

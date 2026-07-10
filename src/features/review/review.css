@@ -41,41 +41,32 @@
   color: var(--color-ink-60);
 }
 
-/* Income vs expense comparison bars (hero card) */
-.review-compare {
+/* 月結結論：三數字第一層 */
+.review-verdict {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 10px;
+  margin-top: 2px;
 }
-.review-compare__row {
-  display: grid;
-  grid-template-columns: 32px 1fr 96px;
-  align-items: center;
+.review-verdict__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 12px;
 }
-.review-compare__label {
-  font-size: 13px;
-  color: var(--color-ink-70);
+.review-verdict__item--net {
+  border-top: var(--border-hairline-soft);
+  padding-top: 10px;
 }
-.review-compare__track {
-  height: 10px;
-  border-radius: 5px;
-  background: var(--color-bar-track);
-  overflow: hidden;
+.review-verdict__label {
+  letter-spacing: 0.06em;
 }
-.review-compare__fill {
-  height: 100%;
-  border-radius: inherit;
+.review-verdict__num {
+  font-size: 18px;
+  font-weight: 600;
 }
-.review-compare__fill--income {
-  background: var(--color-mint);
-}
-.review-compare__fill--expense {
-  background: var(--color-mocha);
-}
-.review-compare__amount {
-  text-align: right;
+.review-verdict__num--net {
+  font-size: 26px;
 }
 
 /* Top expense categories in the hero card */

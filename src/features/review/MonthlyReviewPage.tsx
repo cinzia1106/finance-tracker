@@ -137,7 +137,7 @@ export default function MonthlyReviewPage() {
             </button>
           </div>
           <span className="caption">
-            {year}年{month}月
+            {year}年{month}月 · 月結回顧，非即時數字
           </span>
         </div>
       </header>
@@ -175,40 +175,31 @@ export default function MonthlyReviewPage() {
               </section>
             )}
 
-            {/* Row 1 — hero + category breakdowns */}
+            {/* Row 1 — 月結結論：收入 / 支出 / 淨現金流三數字為第一層 */}
             <section className="card span-4">
-              <div className="micro">本月淨現金流</div>
-              <div
-                className="amount-xl"
-                style={
-                  data.netCashFlow < 0 ? { color: 'var(--color-apricot-deep)' } : undefined
-                }
-              >
-                {formatCurrency(data.netCashFlow, true)}
-              </div>
-              {/* Income vs expense comparison bars — shared scale = the larger side */}
-              <div className="review-compare">
-                {(
-                  [
-                    ['收入', data.income, 'income'],
-                    ['支出', data.expense, 'expense'],
-                  ] as const
-                ).map(([label, amount, tone]) => (
-                  <div key={tone} className="review-compare__row">
-                    <span className="review-compare__label">{label}</span>
-                    <div className="review-compare__track">
-                      <div
-                        className={`review-compare__fill review-compare__fill--${tone}`}
-                        style={{
-                          width: `${(
-                            (amount / Math.max(data.income, data.expense, 1)) * 100
-                          ).toFixed(0)}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="amount-s review-compare__amount">{formatPlain(amount)}</span>
-                  </div>
-                ))}
+              <div className="micro">本月結論</div>
+              <div className="review-verdict">
+                <div className="review-verdict__item">
+                  <span className="micro review-verdict__label">收入</span>
+                  <span className="mono review-verdict__num income">
+                    +{formatPlain(data.income)}
+                  </span>
+                </div>
+                <div className="review-verdict__item">
+                  <span className="micro review-verdict__label">支出</span>
+                  <span className="mono review-verdict__num">−{formatPlain(data.expense)}</span>
+                </div>
+                <div className="review-verdict__item review-verdict__item--net">
+                  <span className="micro review-verdict__label">淨現金流</span>
+                  <span
+                    className="mono review-verdict__num review-verdict__num--net"
+                    style={
+                      data.netCashFlow < 0 ? { color: 'var(--color-apricot-deep)' } : undefined
+                    }
+                  >
+                    {formatCurrency(data.netCashFlow, true)}
+                  </span>
+                </div>
               </div>
               <div className="caption">轉帳不計入</div>
               <div className="caption review-delta">

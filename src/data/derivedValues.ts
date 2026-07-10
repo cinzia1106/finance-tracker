@@ -28,6 +28,21 @@ const SOURCE_LABELS = {
   import_derived: 'import',
 } as const;
 
+const DEFAULT_CURRENCY = 'TWD';
+const CURRENCY_NOTE_RE = /\[currency:([A-Z]{3})\]/i;
+
+function accountCurrency(account: Account) {
+  const match = account.note?.match(CURRENCY_NOTE_RE);
+  return (match?.[1] ?? DEFAULT_CURRENCY).toUpperCase();
+}
+
+function accountDetail(account: Account) {
+  const note = account.note?.replace(CURRENCY_NOTE_RE, '').trim();
+  const currency = accountCurrency(account);
+  if (currency === DEFAULT_CURRENCY) return note || undefined;
+  return note ? `${note} · ${currency}` : currency;
+}
+
 function monthDateRange(year: number, month: number) {
   const start = `${year}-${String(month).padStart(2, '0')}-01`;
   const nextMonth = month === 12 ? 1 : month + 1;
@@ -332,8 +347,9 @@ function buildAccountRows(input: {
 
     return {
       name: account.name,
-      detail: account.note,
+      detail: accountDetail(account),
       accountType: account.type,
+      currency: accountCurrency(account),
       typeLabel: account.type,
       balance,
       isLiability,

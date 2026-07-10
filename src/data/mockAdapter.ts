@@ -142,6 +142,7 @@ const assetOverview: AssetOverview = {
       name: '郵局',
       detail: '薪轉 · 預備金',
       accountType: 'bank',
+      currency: 'TWD',
       typeLabel: '銀行',
       balance: 158_600,
       isLiability: false,
@@ -152,6 +153,7 @@ const assetOverview: AssetOverview = {
     {
       name: '中國信託',
       accountType: 'bank',
+      currency: 'TWD',
       typeLabel: '銀行',
       balance: 42_300,
       isLiability: false,
@@ -163,6 +165,7 @@ const assetOverview: AssetOverview = {
       name: 'LineBank 口袋',
       detail: '旅遊＋設備',
       accountType: 'bank',
+      currency: 'TWD',
       typeLabel: '銀行',
       balance: 30_000,
       isLiability: false,
@@ -173,6 +176,7 @@ const assetOverview: AssetOverview = {
     {
       name: 'LineBank',
       accountType: 'bank',
+      currency: 'TWD',
       typeLabel: '銀行',
       balance: 15_800,
       isLiability: false,
@@ -184,6 +188,7 @@ const assetOverview: AssetOverview = {
       name: '中國信託・交割',
       detail: '僅投資',
       accountType: 'bank',
+      currency: 'TWD',
       typeLabel: '銀行',
       balance: 12_800,
       isLiability: false,
@@ -194,6 +199,7 @@ const assetOverview: AssetOverview = {
     {
       name: '錢包',
       accountType: 'cash',
+      currency: 'TWD',
       typeLabel: '現金',
       balance: 3_100,
       isLiability: false,
@@ -205,6 +211,7 @@ const assetOverview: AssetOverview = {
       name: '證券庫存',
       detail: '市值',
       accountType: 'virtual',
+      currency: 'TWD',
       typeLabel: '投資',
       balance: 214_500,
       isLiability: false,
@@ -215,6 +222,7 @@ const assetOverview: AssetOverview = {
     {
       name: '國泰信用卡',
       accountType: 'credit_card',
+      currency: 'TWD',
       typeLabel: '信用卡',
       balance: 21_300,
       isLiability: true,
@@ -225,6 +233,7 @@ const assetOverview: AssetOverview = {
     {
       name: '國泰世華',
       accountType: 'bank',
+      currency: 'TWD',
       typeLabel: '銀行',
       balance: null,
       isLiability: false,

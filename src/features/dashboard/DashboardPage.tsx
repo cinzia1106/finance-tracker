@@ -5,19 +5,8 @@ import { Link } from 'react-router-dom';
 import type { MonthOverview } from '../../data/adapter';
 import { useAdapter } from '../../data/AdapterContext';
 import { useAppOutletContext } from '../../layout/AppLayout';
-import {
-  BudgetBar,
-  BudgetRow,
-  ReviewBadge,
-  CountBadge,
-  WaterlineBar,
-} from '../../components/ui';
-import {
-  formatCurrency,
-  formatPlain,
-  formatSigned,
-  waterlineGeometry,
-} from '../../lib/format';
+import { BudgetBar, BudgetRow, ReviewBadge, CountBadge } from '../../components/ui';
+import { formatCurrency, formatPlain, formatSigned } from '../../lib/format';
 import './dashboard.css';
 
 const GROUP_TONES = { fixed: 'apricot', variable: 'mocha', growth: 'mint' } as const;
@@ -49,7 +38,6 @@ export default function DashboardPage() {
   if (!data) return null;
 
   const netCashflow = data.income - data.expense;
-  const safeGeo = waterlineGeometry(data.safeline);
 
   return (
     <>
@@ -150,7 +138,7 @@ export default function DashboardPage() {
         </section>
 
         {/* 變動預算 */}
-        <section className="card span-4">
+        <section className="card span-6">
           <h2 className="h2">變動預算</h2>
           {data.budgets.map((b) => (
             <BudgetRow key={b.category} {...b} />
@@ -158,7 +146,7 @@ export default function DashboardPage() {
         </section>
 
         {/* 國泰信用卡 */}
-        <section className="card span-4">
+        <section className="card span-6">
           <div className="card__header">
             <h2 className="h2">國泰信用卡</h2>
             <Link to="/recurring" className="caption dashboard__card-link">
@@ -183,82 +171,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* 郵局安全線 */}
-        <section className="card span-4">
-          <div className="card__header">
-            <h2 className="h2">郵局安全線</h2>
-            <span className="micro dashboard__group-note">
-              最後確認 {data.safeline.confirmedAt}
-            </span>
-          </div>
-          <div className="amount-l">{formatCurrency(data.safeline.balance)}</div>
-          <WaterlineBar safeline={data.safeline} />
-          <div className="dashboard__safeline-notes">
-            <span>
-              第一線 {formatPlain(data.safeline.firstLine)}{' '}
-              {safeGeo.firstLineMet && (
-                <span className="dashboard__check">✓</span>
-              )}
-            </span>
-            <span>
-              安心線 {formatPlain(data.safeline.comfortLine)} ·{' '}
-              <span className="liability" style={{ fontWeight: 500 }}>
-                差 {formatPlain(safeGeo.comfortGap)}
-              </span>
-            </span>
-          </div>
-        </section>
-
-        {/* 投資 — desktop: 4 metrics */}
-        <section className="card span-4 desktop-only">
-          <div className="card__header">
-            <h2 className="h2">投資</h2>
-            <span className="micro dashboard__group-note">
-              市值快照 {data.investment.snapshotDate}
-            </span>
-          </div>
-          <div className="dashboard__invest-grid">
-            <div>
-              <div className="micro dashboard__cc-label">累計淨投入</div>
-              <div className="amount-l dashboard__invest-num">
-                {formatPlain(data.investment.netInvested)}
-              </div>
-            </div>
-            <div>
-              <div className="micro dashboard__cc-label">估計市值</div>
-              <div className="amount-l dashboard__invest-num">
-                {formatPlain(data.investment.marketValue)}
-              </div>
-            </div>
-            <div>
-              <div className="micro dashboard__cc-label">未實現損益</div>
-              <div className="amount-s income">
-                {formatSigned(data.investment.unrealizedGain)} (+
-                {data.investment.unrealizedGainPct}%)
-              </div>
-            </div>
-            <div>
-              <div className="micro dashboard__cc-label">本月買入</div>
-              <div className="amount-s">{formatPlain(data.investment.monthlyBuy)}</div>
-            </div>
-          </div>
-        </section>
-
-        {/* 投資淨投入 — mobile: one-line card */}
-        <section className="card mobile-only dashboard__invest-line">
-          <div className="dashboard__invest-line-inner">
-            <div>
-              <div className="h2" style={{ fontSize: 13 }}>投資淨投入</div>
-              <div className="micro dashboard__group-note">
-                市值 {formatPlain(data.investment.marketValue)} ·{' '}
-                {data.investment.snapshotDate} 快照
-              </div>
-            </div>
-            <div className="mono dashboard__invest-line-num">
-              {formatPlain(data.investment.netInvested)}
-            </div>
-          </div>
-        </section>
+        {/* 資產與投資分析移至「資產」頁；總覽聚焦本月現金流 */}
 
         {/* 管理入口 — mobile only（設計：管理頁從總覽進入，底部導航固定 4 分頁） */}
         <section className="card row-list mobile-only">
@@ -281,7 +194,7 @@ export default function DashboardPage() {
         </section>
 
         {/* 最近交易 — desktop only */}
-        <section className="card span-8 desktop-only">
+        <section className="card span-12 desktop-only">
           <div className="card__header">
             <h2 className="h2">最近交易</h2>
             <Link to="/transactions" className="caption dashboard__card-link">
