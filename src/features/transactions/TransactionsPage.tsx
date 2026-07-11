@@ -50,6 +50,7 @@ function amountClass(tx: Transaction) {
 function rowStateClass(tx: Transaction) {
   if (tx.status === 'needs_review') return ' data-table__row--review';
   if (tx.type === 'transfer') return ' data-table__row--muted';
+  if (tx.type === 'income') return ' data-table__row--income';
   return '';
 }
 
@@ -208,9 +209,12 @@ export default function TransactionsPage() {
 
   async function toggleTag(tx: Transaction, tag: string) {
     if (!adapter.updateTransaction) return;
-    const tags = tx.tags.includes(tag)
-      ? tx.tags.filter((t) => t !== tag)
-      : [...tx.tags, tag];
+    // Read the freshest row from state: a second toggle fired before the
+    // re-render must build on the first one, not overwrite it.
+    const current = (transactions ?? []).find((row) => row.id === tx.id) ?? tx;
+    const tags = current.tags.includes(tag)
+      ? current.tags.filter((t) => t !== tag)
+      : [...current.tags, tag];
     setSavingId(tx.id);
     setEditError(null);
     try {

@@ -38,10 +38,17 @@
 .tx-mobile-row {
   gap: 12px;
 }
-.tx-mobile-row.data-table__row--review {
+.tx-mobile-row.data-table__row--review,
+.tx-mobile-row.data-table__row--income {
   margin: 0 -16px;
   padding-left: 16px;
   padding-right: 16px;
+}
+
+/* Income amounts read heavier so inflow rows pop against the wash */
+.tx-grid .cell-right.income,
+.tx-mobile-row .amount-s.income {
+  font-weight: 600;
 }
 .tx-mobile-main {
   display: flex;
@@ -104,14 +111,17 @@
 .tx-subtag {
   display: inline-flex;
   align-items: center;
-  padding: 1px 7px;
+  height: 20px;
+  padding: 0 8px;
   border-radius: 6px;
   border: var(--border-hairline);
   background: var(--color-card);
   color: var(--color-ink-60);
   font-family: var(--font-ui);
   font-size: 11px;
+  line-height: 1;
   cursor: pointer;
+  box-sizing: border-box;
 }
 .tx-subtag:hover {
   background: var(--color-row-hover);

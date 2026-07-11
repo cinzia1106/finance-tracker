@@ -258,6 +258,9 @@ p {
 .data-table__row--review {
   background: var(--color-apricot-row);
 }
+.data-table__row--income {
+  background: var(--color-mint-row);
+}
 .data-table__row--muted {
   color: var(--color-ink-muted-row);
 }
