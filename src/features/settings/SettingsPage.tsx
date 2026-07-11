@@ -17,7 +17,10 @@ export default function SettingsPage() {
   const [emergencyFundMonths, setEmergencyFundMonths] = useState('3');
   const [dashboardBudgets, setDashboardBudgets] = useState<Record<string, string>>(
     Object.fromEntries(
-      BUDGET_CATEGORIES.map((category) => [category, String(DEFAULT_DASHBOARD_BUDGETS[category])]),
+      BUDGET_CATEGORIES.map((category) => [
+        category,
+        String(DEFAULT_DASHBOARD_BUDGETS[category] ?? 0),
+      ]),
     ),
   );
   const [saving, setSaving] = useState(false);
@@ -33,7 +36,7 @@ export default function SettingsPage() {
         Object.fromEntries(
           BUDGET_CATEGORIES.map((category) => [
             category,
-            String(budgets[category] ?? DEFAULT_DASHBOARD_BUDGETS[category]),
+            String(budgets[category] ?? DEFAULT_DASHBOARD_BUDGETS[category] ?? 0),
           ]),
         ),
       );

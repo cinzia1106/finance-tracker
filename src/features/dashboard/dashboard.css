@@ -126,6 +126,14 @@
 .dashboard__fixed-empty {
   line-height: 1.6;
 }
+.dashboard__fixed-allpaid {
+  color: var(--color-mint-deep);
+  font-weight: 500;
+}
+/* Overview due list has three cells: name / amount / mark-paid */
+.dashboard__fixed-row--due {
+  grid-template-columns: minmax(0, 1fr) 96px auto;
+}
 
 .dashboard__card-link {
   font-weight: 500;

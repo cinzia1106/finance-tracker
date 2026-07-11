@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import AuthGate from './auth/AuthGate';
 import { AdapterProvider } from './data/AdapterContext';
@@ -9,6 +9,7 @@ import AssetsPage from './features/assets/AssetsPage';
 import TransactionsPage from './features/transactions/TransactionsPage';
 import ImportPage from './features/import/ImportPage';
 import InboxPage from './features/inbox/InboxPage';
+import FixedCostsPage from './features/recurring/FixedCostsPage';
 import InvestmentsPage from './features/investments/InvestmentsPage';
 import MonthlyReviewPage from './features/review/MonthlyReviewPage';
 import SettingsPage from './features/settings/SettingsPage';
@@ -33,8 +34,7 @@ export default function App() {
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="import" element={<ImportPage />} />
                 <Route path="inbox" element={<InboxPage />} />
-                {/* 固定支出頁已併入總覽的本月支出三組 */}
-                <Route path="recurring" element={<Navigate to="/" replace />} />
+                <Route path="recurring" element={<FixedCostsPage />} />
                 <Route path="investments" element={<InvestmentsPage />} />
                 <Route path="monthly-review" element={<MonthlyReviewPage />} />
                 <Route path="settings" element={<SettingsPage />} />

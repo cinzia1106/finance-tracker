@@ -253,8 +253,9 @@ export function BudgetRow({
   spent: number;
   budget: number;
 }) {
+  const hasBudget = budget > 0;
   const ratio = budgetRatio(spent, budget);
-  const warning = ratio >= BUDGET_WARNING_THRESHOLD;
+  const warning = hasBudget && ratio >= BUDGET_WARNING_THRESHOLD;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
@@ -269,10 +270,19 @@ export function BudgetRow({
         </span>
         <span className="mono" style={{ color: 'var(--color-ink-70)' }}>
           {formatPlain(spent)}{' '}
-          <span style={{ color: 'var(--color-ink-40)' }}>/ {formatPlain(budget)}</span>
+          {hasBudget ? (
+            <span style={{ color: 'var(--color-ink-40)' }}>/ {formatPlain(budget)}</span>
+          ) : (
+            <span
+              className="micro"
+              style={{ color: 'var(--color-ink-40)', letterSpacing: 0, fontFamily: 'var(--font-ui)' }}
+            >
+              未設預算
+            </span>
+          )}
         </span>
       </div>
-      <BudgetBar ratio={ratio} tone={warning ? 'apricot-strong' : 'mint'} />
+      {hasBudget && <BudgetBar ratio={ratio} tone={warning ? 'apricot-strong' : 'mint'} />}
     </div>
   );
 }
