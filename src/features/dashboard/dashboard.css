@@ -48,6 +48,11 @@
   padding-bottom: 4px;
   border-bottom: var(--border-hairline-soft);
 }
+.dashboard__fixed-edit-form {
+  grid-column: 1 / -1;
+  padding: 8px 0 4px 0;
+  border-top: var(--border-hairline-soft);
+}
 .dashboard__fixed-error {
   padding: 8px 12px;
   border-radius: var(--radius-badge);
@@ -211,5 +216,31 @@
   }
   .dashboard__invest-grid {
     grid-template-columns: 1fr 1fr;
+  }
+  /* Fixed-cost rows reflow to two lines: name+amount / status+actions */
+  .dashboard__fixed-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name amount'
+      'badge actions';
+    row-gap: 6px;
+  }
+  .dashboard__fixed-name {
+    grid-area: name;
+  }
+  .dashboard__fixed-amount {
+    grid-area: amount;
+  }
+  .dashboard__fixed-badge {
+    grid-area: badge;
+    justify-self: start;
+  }
+  .dashboard__fixed-actions {
+    grid-area: actions;
+    justify-self: end;
+  }
+  .dashboard__fixed-edit-form {
+    grid-area: auto;
+    grid-column: 1 / -1;
   }
 }

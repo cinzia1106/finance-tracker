@@ -5,9 +5,11 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { useAdapter } from '../../data/AdapterContext';
-import { DEFAULT_DASHBOARD_BUDGETS } from '../../data/categoryDefinitions';
+import { CATEGORY_DEFINITIONS, DEFAULT_DASHBOARD_BUDGETS } from '../../data/categoryDefinitions';
 
-const BUDGET_CATEGORIES = Object.keys(DEFAULT_DASHBOARD_BUDGETS);
+const BUDGET_CATEGORIES = CATEGORY_DEFINITIONS.filter((category) => category.kind === 'expense').map(
+  (category) => category.name,
+);
 
 export default function SettingsPage() {
   const { signOut } = useAuth();

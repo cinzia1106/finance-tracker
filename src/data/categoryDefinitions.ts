@@ -86,14 +86,23 @@ export function categoryGroupForTransaction(input: CategoryGroupInput): Exclude<
 export function budgetedExpenseCategories(
   budgets: Record<string, number> = DEFAULT_DASHBOARD_BUDGETS,
 ): Category[] {
-  return CATEGORY_DEFINITIONS.filter(
-    (category) => category.kind === 'expense' && budgets[category.name] != null,
-  ).map((category) => ({
+  return CATEGORY_DEFINITIONS.filter((category) => category.kind === 'expense').map((category) => ({
     ...category,
-    budget: budgets[category.name],
+    budget: budgets[category.name] ?? category.budget ?? 0,
   }));
 }
 
 export function tagsForCategory(category: string) {
   return TAGS_BY_CATEGORY[category] ?? [];
+}
+
+export function canonicalExpenseCategoryForTransaction(input: CategoryGroupInput): string {
+  if (getCategoryDefinition(input.category, 'expense')) return input.category;
+  for (const [category, tags] of Object.entries(TAGS_BY_CATEGORY)) {
+    if (!getCategoryDefinition(category, 'expense')) continue;
+    if (tags.includes(input.category) || (input.tags ?? []).some((tag) => tags.includes(tag))) {
+      return category;
+    }
+  }
+  return input.category || 'Uncategorized';
 }

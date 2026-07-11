@@ -11,6 +11,7 @@ import type {
 import {
   DEFAULT_DASHBOARD_BUDGETS,
   budgetedExpenseCategories,
+  canonicalExpenseCategoryForTransaction,
   categoryGroupForTransaction,
 } from './categoryDefinitions';
 import type {
@@ -434,7 +435,7 @@ export function buildMonthOverview(input: {
   const budgets = budgetedExpenseCategories(settings.dashboardBudgets).map((category) => ({
     category: category.name,
     spent: expenseRows
-      .filter((tx) => tx.category === category.name)
+      .filter((tx) => canonicalExpenseCategoryForTransaction(tx) === category.name)
       .reduce((total, tx) => total + tx.amount, 0),
     budget: category.budget ?? 0,
   }));

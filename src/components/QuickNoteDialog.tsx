@@ -1,9 +1,8 @@
-/* 快速手記 — minimal manual-entry dialog. Submits through the existing
-   adapter.createTransaction path (manual source); no new data rules.
-   Spec: manual notes serve cash / exceptions, transfers use category 轉帳. */
+/* Quick note dialog. Creates one manual transaction through the active adapter. */
 
 import { useEffect, useState } from 'react';
 import { useAdapter } from '../data/AdapterContext';
+import { CATEGORY_DEFINITIONS, tagsForCategory } from '../data/categoryDefinitions';
 import type { Account, TransactionType } from '../types/models';
 
 const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
@@ -14,6 +13,14 @@ const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function categoriesForType(type: TransactionType) {
+  return CATEGORY_DEFINITIONS.filter((category) => category.kind === type);
+}
+
+function defaultCategoryForType(type: TransactionType) {
+  return categoriesForType(type)[0]?.name ?? '';
 }
 
 export default function QuickNoteDialog({
@@ -30,7 +37,8 @@ export default function QuickNoteDialog({
   const [date, setDate] = useState(today());
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState(defaultCategoryForType('expense'));
+  const [tag, setTag] = useState('');
   const [account, setAccount] = useState('');
   const [toAccount, setToAccount] = useState('');
   const [note, setNote] = useState('');
@@ -42,7 +50,8 @@ export default function QuickNoteDialog({
     setDate(today());
     setType('expense');
     setAmount('');
-    setCategory('');
+    setCategory(defaultCategoryForType('expense'));
+    setTag('');
     setToAccount('');
     setNote('');
     setError(null);
@@ -54,14 +63,25 @@ export default function QuickNoteDialog({
 
   if (!open) return null;
 
+  const categoryOptions = categoriesForType(type);
+  const tagOptions = type === 'transfer' ? [] : tagsForCategory(category);
+
+  function changeType(nextType: TransactionType) {
+    setType(nextType);
+    setCategory(defaultCategoryForType(nextType));
+    setTag('');
+  }
+
   async function save() {
     if (!adapter.createTransaction) return;
     const value = Math.round(Number(amount));
+    const selectedCategory = category || defaultCategoryForType(type);
     if (!date) return setError('請選擇日期。');
-    if (!Number.isFinite(value) || value === 0) return setError('金額需為非零數字。');
+    if (!Number.isFinite(value) || value === 0) return setError('金額需為非 0 整數。');
+    if (!selectedCategory) return setError('請選擇分類。');
     if (!account.trim()) return setError('請填寫帳戶。');
     if (type === 'transfer') {
-      if (!toAccount.trim()) return setError('轉帳需填寫轉入帳戶。');
+      if (!toAccount.trim()) return setError('轉帳需要填寫轉入帳戶。');
       if (toAccount.trim() === account.trim()) return setError('轉出與轉入帳戶不可相同。');
     }
     setBusy(true);
@@ -71,11 +91,11 @@ export default function QuickNoteDialog({
         date,
         type,
         amount: value,
-        category: type === 'transfer' ? '轉帳' : category.trim() || '其他',
+        category: selectedCategory,
         account: account.trim(),
         toAccount: type === 'transfer' ? toAccount.trim() : undefined,
         note: note.trim(),
-        tags: [],
+        tags: tag ? [tag] : [],
         status: 'confirmed',
         source: 'manual',
       });
@@ -111,11 +131,11 @@ export default function QuickNoteDialog({
             <select
               className="text-input"
               value={type}
-              onChange={(e) => setType(e.target.value as TransactionType)}
+              onChange={(e) => changeType(e.target.value as TransactionType)}
             >
-              {TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
+              {TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -131,16 +151,34 @@ export default function QuickNoteDialog({
               onChange={(e) => setAmount(e.target.value)}
             />
           </label>
-          {type !== 'transfer' && (
+          <label className="qn-field">
+            <span className="micro">分類</span>
+            <select
+              className="text-input"
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setTag('');
+              }}
+            >
+              {categoryOptions.map((option) => (
+                <option key={option.name} value={option.name}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {tagOptions.length > 0 && (
             <label className="qn-field">
-              <span className="micro">分類</span>
-              <input
-                type="text"
-                className="text-input"
-                placeholder="食 / 生活 / 交通…"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              />
+              <span className="micro">標籤</span>
+              <select className="text-input" value={tag} onChange={(e) => setTag(e.target.value)}>
+                <option value="">不指定</option>
+                {tagOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </label>
           )}
           <label className="qn-field">
@@ -170,7 +208,7 @@ export default function QuickNoteDialog({
             <input
               type="text"
               className="text-input"
-              placeholder="商家、對象或用途"
+              placeholder="例如：臨時代墊、現金支出"
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
