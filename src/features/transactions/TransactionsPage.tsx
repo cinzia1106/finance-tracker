@@ -375,17 +375,7 @@ export default function TransactionsPage() {
     if (shown.length === 0 && options.length === 0) return null;
     return (
       <span className="tx-tags">
-        {/* ＋ leads so the editor affordance forms an aligned column */}
-        {options.length > 0 && (
-          <button
-            type="button"
-            className="tx-subtag tx-subtag--edit"
-            onClick={() => setTagEditorId(editing ? null : tx.id)}
-            aria-label={editing ? '完成編輯標籤' : '編輯標籤'}
-          >
-            {editing ? '完成' : '＋'}
-          </button>
-        )}
+        {/* Active tags hug the column's left edge; ＋ pins to the right */}
         {shown.map((tag) => (
           <button
             key={tag}
@@ -397,6 +387,16 @@ export default function TransactionsPage() {
             {tag}
           </button>
         ))}
+        {options.length > 0 && (
+          <button
+            type="button"
+            className="tx-subtag tx-subtag--edit"
+            onClick={() => setTagEditorId(editing ? null : tx.id)}
+            aria-label={editing ? '完成編輯標籤' : '編輯標籤'}
+          >
+            {editing ? '完成' : '＋'}
+          </button>
+        )}
       </span>
     );
   }
