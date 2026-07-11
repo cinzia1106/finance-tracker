@@ -1,17 +1,25 @@
-/* 總覽 Dashboard — static UI per the 1a design (mobile + desktop). */
+/* 總覽 Dashboard — 本月現金流、固定支出繳費狀態、預算與信用卡。
+   固定支出是使用者自建清單（recurring_items），已繳 = lastPaid 落在
+   檢視月份；標記/新增/刪除走 adapter 的 recurring CRUD。 */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { MonthOverview } from '../../data/adapter';
 import { useAdapter } from '../../data/AdapterContext';
-import { categoryGroupFor } from '../../data/categoryDefinitions';
-import type { Transaction } from '../../types/models';
+import { CATEGORY_DEFINITIONS } from '../../data/categoryDefinitions';
+import type { RecurringExpense } from '../../types/models';
 import { useAppOutletContext } from '../../layout/AppLayout';
-import { BudgetBar, BudgetRow, ReviewBadge, CountBadge } from '../../components/ui';
+import { BudgetRow, ReviewBadge, CountBadge } from '../../components/ui';
 import { formatCurrency, formatPlain, formatSigned } from '../../lib/format';
 import './dashboard.css';
 
-const GROUP_TONES = { fixed: 'apricot', variable: 'mocha', growth: 'mint' } as const;
+const FIXED_CATEGORY_OPTIONS = CATEGORY_DEFINITIONS.filter((c) => c.kind === 'expense').map(
+  (c) => c.name,
+);
+
+function itemAmount(item: RecurringExpense) {
+  return item.amount ?? item.monthlyEquiv ?? 0;
+}
 
 export default function DashboardPage() {
   const adapter = useAdapter();
@@ -20,46 +28,122 @@ export default function DashboardPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [data, setData] = useState<MonthOverview | null>(null);
-  const [monthTransactions, setMonthTransactions] = useState<Transaction[]>([]);
-  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [recurring, setRecurring] = useState<RecurringExpense[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({ name: '', amount: '', category: '訂閱', billingDay: '' });
+  const [fixedError, setFixedError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     adapter.getMonthOverview(year, month).then((d) => {
       if (!cancelled) setData(d);
     });
-    adapter
-      .listTransactions?.(year, month)
-      .then((rows) => {
-        if (!cancelled) setMonthTransactions(rows);
-      })
-      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
   }, [adapter, year, month, dataVersion]);
 
-  /** Display-only aggregation: expense categories per group, so the
-      three-group card can expand into its own breakdown (the former
-      fixed-costs page folded in here). */
-  const groupBreakdown = useMemo(() => {
-    const byGroup = new Map<string, Map<string, number>>();
-    for (const tx of monthTransactions) {
-      if (tx.type !== 'expense') continue;
-      const group = categoryGroupFor(tx.category);
-      const categories = byGroup.get(group) ?? new Map<string, number>();
-      categories.set(tx.category, (categories.get(tx.category) ?? 0) + tx.amount);
-      byGroup.set(group, categories);
+  useEffect(() => {
+    let cancelled = false;
+    adapter
+      .listRecurringItems?.()
+      .then((rows) => {
+        if (!cancelled) setRecurring(rows);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [adapter, dataVersion]);
+
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+
+  /** 每月固定支出：自建清單＋本月繳費狀態。 */
+  const fixedCosts = useMemo(() => {
+    const rows = recurring
+      .filter((item) => item.active !== false)
+      .map((item) => ({ item, paid: (item.lastPaid ?? '').startsWith(monthKey) }));
+    rows.sort(
+      (a, b) => Number(a.paid) - Number(b.paid) || itemAmount(b.item) - itemAmount(a.item),
+    );
+    return {
+      rows,
+      total: rows.reduce((sum, row) => sum + itemAmount(row.item), 0),
+      paidCount: rows.filter((row) => row.paid).length,
+    };
+  }, [recurring, monthKey]);
+
+  async function addFixedItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!adapter.createRecurringItem) return;
+    const amount = Math.round(Number(addForm.amount));
+    if (!addForm.name.trim() || !Number.isFinite(amount) || amount <= 0) {
+      setFixedError('請填寫名稱與正確金額。');
+      return;
     }
-    const result = new Map<string, [string, number][]>();
-    for (const [group, categories] of byGroup) {
-      result.set(
-        group,
-        [...categories.entries()].sort((a, b) => b[1] - a[1]),
+    const billingDay = addForm.billingDay ? Number(addForm.billingDay) : null;
+    setBusyId('new');
+    setFixedError(null);
+    try {
+      const created = await adapter.createRecurringItem({
+        name: addForm.name.trim(),
+        amount,
+        cycle: 'monthly',
+        monthlyEquiv: null,
+        category: addForm.category,
+        billingDay: billingDay && billingDay >= 1 && billingDay <= 31 ? billingDay : null,
+        active: true,
+      });
+      setRecurring((prev) => [...prev, created]);
+      setAddForm({ name: '', amount: '', category: '訂閱', billingDay: '' });
+      setShowAdd(false);
+    } catch (err) {
+      setFixedError(err instanceof Error ? err.message : '新增失敗，請稍後再試。');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function setPaid(item: RecurringExpense, paid: boolean) {
+    if (!adapter.updateRecurringItem || !item.id) return;
+    const lastPaid = paid
+      ? isCurrentMonth
+        ? new Date().toISOString().slice(0, 10)
+        : `${monthKey}-01`
+      : null;
+    setBusyId(item.id);
+    setFixedError(null);
+    try {
+      await adapter.updateRecurringItem(item.id, { lastPaid });
+      setRecurring((prev) =>
+        prev.map((row) =>
+          row.id === item.id ? { ...row, lastPaid: lastPaid ?? undefined } : row,
+        ),
       );
+    } catch (err) {
+      setFixedError(err instanceof Error ? err.message : '更新失敗，請稍後再試。');
+    } finally {
+      setBusyId(null);
     }
-    return result;
-  }, [monthTransactions]);
+  }
+
+  async function removeFixedItem(item: RecurringExpense) {
+    if (!adapter.deleteRecurringItem || !item.id) return;
+    setBusyId(item.id);
+    setFixedError(null);
+    try {
+      await adapter.deleteRecurringItem(item.id);
+      setRecurring((prev) => prev.filter((row) => row.id !== item.id));
+      setDeleteConfirmId(null);
+    } catch (err) {
+      setFixedError(err instanceof Error ? err.message : '刪除失敗，請稍後再試。');
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   function shiftMonth(delta: number) {
     const d = new Date(year, month - 1 + delta, 1);
@@ -130,80 +214,173 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* 支出三組 */}
-        <section className="card span-4">
+        {/* 每月固定支出 — 自建清單＋本月繳費狀態 */}
+        <section className="card span-7">
           <div className="card__header">
-            <h2 className="h2">本月支出三組</h2>
-            <span className="micro dashboard__group-note">
-              <span className="desktop-only">合計 {formatPlain(data.expense)}</span>
-              <span className="mobile-only">不含轉帳</span>
+            <h2 className="h2">每月固定支出</h2>
+            <span className="dashboard__fixed-header-side">
+              {fixedCosts.rows.length > 0 && (
+                <span className="micro dashboard__group-note">
+                  已繳 {fixedCosts.paidCount}/{fixedCosts.rows.length} · 月承諾{' '}
+                  {formatPlain(fixedCosts.total)}
+                </span>
+              )}
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => setShowAdd((v) => !v)}
+              >
+                {showAdd ? '收合' : '＋ 新增'}
+              </button>
             </span>
           </div>
-          {data.expenseGroups.map((g) => {
-            const breakdown = groupBreakdown.get(g.key) ?? [];
-            const open = openGroup === g.key;
-            return (
-              <div key={g.key} className="dashboard__bar-row">
-                <button
-                  type="button"
-                  className="dashboard__bar-label dashboard__bar-toggle"
-                  onClick={() => setOpenGroup(open ? null : g.key)}
-                  aria-expanded={open}
-                >
-                  <span>
-                    {g.label}
-                    {breakdown.length > 0 && (
-                      <span className="dashboard__bar-caret">{open ? '▾' : '▸'}</span>
-                    )}
-                  </span>
-                  <span className="amount-s">{formatPlain(g.amount)}</span>
-                </button>
-                <BudgetBar
-                  ratio={data.expense > 0 ? g.amount / data.expense : 0}
-                  tone={GROUP_TONES[g.key]}
+
+          {fixedError && <div className="caption dashboard__fixed-error">{fixedError}</div>}
+
+          {showAdd && (
+            <form onSubmit={(e) => void addFixedItem(e)} className="form-grid dashboard__fixed-form">
+              <label className="form-field">
+                <span className="micro">名稱</span>
+                <input
+                  className="text-input"
+                  placeholder="Adobe / 健身房 / 筆電分期…"
+                  value={addForm.name}
+                  onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
                 />
-                {open && breakdown.length > 0 && (
-                  <div className="dashboard__group-detail">
-                    {breakdown.map(([category, amount]) => (
-                      <div key={category} className="dashboard__group-detail-row">
-                        <span className="caption">{category}</span>
-                        <span className="mono caption">{formatPlain(amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              </label>
+              <label className="form-field">
+                <span className="micro">每月金額</span>
+                <input
+                  className="text-input mono"
+                  type="number"
+                  placeholder="0"
+                  value={addForm.amount}
+                  onChange={(e) => setAddForm({ ...addForm, amount: e.target.value })}
+                />
+              </label>
+              <label className="form-field">
+                <span className="micro">分類</span>
+                <select
+                  className="text-input"
+                  value={addForm.category}
+                  onChange={(e) => setAddForm({ ...addForm, category: e.target.value })}
+                >
+                  {FIXED_CATEGORY_OPTIONS.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="form-field">
+                <span className="micro">每月扣款日（選填）</span>
+                <input
+                  className="text-input mono"
+                  type="number"
+                  min="1"
+                  max="31"
+                  placeholder="20"
+                  value={addForm.billingDay}
+                  onChange={(e) => setAddForm({ ...addForm, billingDay: e.target.value })}
+                />
+              </label>
+              <div className="form-actions">
+                <button type="submit" className="btn btn--primary btn--sm" disabled={busyId === 'new'}>
+                  新增項目
+                </button>
               </div>
-            );
-          })}
-        </section>
+            </form>
+          )}
 
-        {/* 收件匣摘要 — desktop only */}
-        <section className="card span-3 desktop-only">
-          <div className="card__header">
-            <h2 className="h2">待確認</h2>
-            <CountBadge count={data.needsReviewCount} />
-          </div>
-          {data.inboxPreview.map((item) => (
-            <div key={item.note} className="dashboard__inbox-row">
-              <span className="caption">{item.note}</span>
-              <span className="mono">
-                {item.type === 'transfer'
-                  ? formatPlain(item.amount)
-                  : formatSigned(item.type === 'expense' ? -item.amount : item.amount)}
-              </span>
+          {fixedCosts.rows.length === 0 && !showAdd ? (
+            <span className="caption dashboard__fixed-empty">
+              尚未建立固定支出。按「＋ 新增」把訂閱軟體、分期、健身等每月固定項目列進來，
+              就能追蹤本月是否已繳費。
+            </span>
+          ) : (
+            <div className="dashboard__fixed-list">
+              {fixedCosts.rows.map(({ item, paid }) => (
+                <div key={item.id} className="dashboard__fixed-row">
+                  <span className="dashboard__fixed-name cell-ellipsis" title={item.name}>
+                    {item.name}
+                    <span className="micro dashboard__fixed-meta">
+                      {' '}
+                      {item.category}
+                      {item.billingDay ? ` · 每月${item.billingDay}日` : ''}
+                    </span>
+                  </span>
+                  <span className="amount-s dashboard__fixed-amount">
+                    {formatPlain(itemAmount(item))}
+                  </span>
+                  {paid ? (
+                    <button
+                      type="button"
+                      className="badge badge--confirmed dashboard__fixed-badge"
+                      disabled={busyId === item.id}
+                      title="點擊改為未繳"
+                      onClick={() => void setPaid(item, false)}
+                    >
+                      <span className="badge__dot" />
+                      已繳費
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="badge badge--review dashboard__fixed-badge"
+                      disabled={busyId === item.id}
+                      title="點擊標記為已繳"
+                      onClick={() => void setPaid(item, true)}
+                    >
+                      <span className="badge__dot" />
+                      待繳
+                    </button>
+                  )}
+                  {deleteConfirmId === item.id ? (
+                    <span className="dashboard__fixed-actions">
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm dashboard__fixed-danger"
+                        disabled={busyId === item.id}
+                        onClick={() => void removeFixedItem(item)}
+                      >
+                        確認刪除
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => setDeleteConfirmId(null)}
+                      >
+                        取消
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="dashboard__fixed-delete"
+                      aria-label={`刪除 ${item.name}`}
+                      title="刪除"
+                      onClick={() => setDeleteConfirmId(item.id ?? null)}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-          <Link to="/inbox" className="caption dashboard__inbox-link">
-            前往收件匣批次處理 →
-          </Link>
+          )}
         </section>
 
-        {/* 變動預算 */}
+        {/* 變動預算 — 支出與預算對照 */}
         <section className="card span-6">
-          <h2 className="h2">變動預算</h2>
-          {data.budgets.map((b) => (
-            <BudgetRow key={b.category} {...b} />
-          ))}
+          <div className="card__header">
+            <h2 className="h2">變動預算</h2>
+            <span className="micro dashboard__group-note">本月支出 vs 預算</span>
+          </div>
+          {data.budgets.length === 0 ? (
+            <span className="caption">尚未設定預算。可於設定頁配置各分類預算。</span>
+          ) : (
+            data.budgets.map((b) => <BudgetRow key={b.category} {...b} />)
+          )}
         </section>
 
         {/* 信用卡 */}
@@ -231,8 +408,6 @@ export default function DashboardPage() {
             繳卡費以轉帳記錄，不重複列為支出
           </div>
         </section>
-
-        {/* 資產與投資分析移至「資產」頁；總覽聚焦本月現金流 */}
 
         {/* 管理入口 — mobile only（設計：管理頁從總覽進入，底部導航固定 4 分頁） */}
         <section className="card row-list mobile-only">
@@ -276,7 +451,9 @@ export default function DashboardPage() {
                   ? ' data-table__row--review'
                   : tx.type === 'transfer'
                     ? ' data-table__row--muted'
-                    : '';
+                    : tx.type === 'income'
+                      ? ' data-table__row--income'
+                      : '';
               return (
                 <div key={tx.id} className={`data-table__row dashboard__tx-grid${rowClass}`}>
                   <span className="mono caption">{tx.date}</span>

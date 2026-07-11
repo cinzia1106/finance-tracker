@@ -12,6 +12,7 @@ export type TransactionStatus = 'confirmed' | 'needs_review';
 export type TransactionSource = 'manual' | 'import';
 export type ImportBatchStatus = 'uploaded' | 'processing' | 'completed' | 'failed';
 export type SnapshotSource = 'manual_check' | 'statement' | 'import_derived';
+export type RecurringCycle = 'monthly' | 'semiannual' | 'yearly' | 'irregular';
 
 export interface Database {
   public: {
@@ -62,6 +63,63 @@ export interface Database {
           type?: AccountType;
           note?: string | null;
           active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      recurring_items: {
+        Row: {
+          id: string;
+          user_id: string;
+          account_id: string | null;
+          payment_account_id: string | null;
+          name: string;
+          amount: number | null;
+          cycle: RecurringCycle;
+          monthly_equivalent: number | null;
+          category: string;
+          billing_day: number | null;
+          active: boolean;
+          last_paid: string | null;
+          next_due: string | null;
+          note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          account_id?: string | null;
+          payment_account_id?: string | null;
+          name: string;
+          amount?: number | null;
+          cycle: RecurringCycle;
+          monthly_equivalent?: number | null;
+          category?: string;
+          billing_day?: number | null;
+          active?: boolean;
+          last_paid?: string | null;
+          next_due?: string | null;
+          note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          account_id?: string | null;
+          payment_account_id?: string | null;
+          name?: string;
+          amount?: number | null;
+          cycle?: RecurringCycle;
+          monthly_equivalent?: number | null;
+          category?: string;
+          billing_day?: number | null;
+          active?: boolean;
+          last_paid?: string | null;
+          next_due?: string | null;
+          note?: string | null;
           created_at?: string;
           updated_at?: string;
         };

@@ -91,6 +91,10 @@ export class SyncedDataAdapter implements DataAdapter {
   createDebtSnapshot = this.remote.createDebtSnapshot.bind(this.remote);
   getUserSettings = this.remote.getUserSettings.bind(this.remote);
   updateUserSettings = this.remote.updateUserSettings.bind(this.remote);
+  listRecurringItems = this.remote.listRecurringItems.bind(this.remote);
+  createRecurringItem = this.remote.createRecurringItem.bind(this.remote);
+  updateRecurringItem = this.remote.updateRecurringItem.bind(this.remote);
+  deleteRecurringItem = this.remote.deleteRecurringItem.bind(this.remote);
 
   async listTransactions(year?: number, month?: number): Promise<Transaction[]> {
     const [remoteTransactions, cachedTransactions] = await Promise.all([

@@ -6,13 +6,22 @@ import type {
   DebtSnapshotDraft,
   ImportBatchDraft,
   MonthOverview,
+  RecurringItemDraft,
   TransactionDraft,
 } from './adapter';
 import { buildAssetOverview, buildMonthOverview } from './derivedValues';
 import { DEFAULT_DASHBOARD_BUDGETS } from './categoryDefinitions';
 import { requireSupabase } from '../lib/supabaseClient';
 import type { Database, Json } from '../lib/supabaseTypes';
-import type { Account, AssetSnapshot, ImportBatch, LiabilitySnapshot, Transaction, UserSettings } from '../types/models';
+import type {
+  Account,
+  AssetSnapshot,
+  ImportBatch,
+  LiabilitySnapshot,
+  RecurringExpense,
+  Transaction,
+  UserSettings,
+} from '../types/models';
 
 type AccountRow = Database['public']['Tables']['accounts']['Row'];
 type AccountInsert = Database['public']['Tables']['accounts']['Insert'];
@@ -29,6 +38,9 @@ type DebtSnapshotRow = Database['public']['Tables']['debt_snapshots']['Row'];
 type DebtSnapshotInsert = Database['public']['Tables']['debt_snapshots']['Insert'];
 type UserSettingsRow = Database['public']['Tables']['user_settings']['Row'];
 type SyncEventInsert = Database['public']['Tables']['sync_events']['Insert'];
+type RecurringRow = Database['public']['Tables']['recurring_items']['Row'];
+type RecurringInsert = Database['public']['Tables']['recurring_items']['Insert'];
+type RecurringUpdate = Database['public']['Tables']['recurring_items']['Update'];
 
 const LOCAL_SETTINGS_KEY = 'finance-tracker:user-settings';
 
@@ -49,6 +61,23 @@ function mapAccount(row: AccountRow): Account {
     active: row.active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapRecurringItem(row: RecurringRow): RecurringExpense {
+  return {
+    id: row.id,
+    name: row.name,
+    amount: row.amount === null ? null : Number(row.amount),
+    cycle: row.cycle,
+    monthlyEquiv: row.monthly_equivalent === null ? null : Number(row.monthly_equivalent),
+    category: row.category,
+    account: row.account_id ?? '',
+    billingDay: row.billing_day,
+    active: row.active,
+    lastPaid: row.last_paid ?? undefined,
+    nextDue: row.next_due ?? undefined,
+    note: row.note ?? undefined,
   };
 }
 
@@ -334,6 +363,83 @@ export class SupabaseDataAdapter implements DataAdapter {
 
     if (error) throw error;
     return mapDebtSnapshot(data);
+  }
+
+  async listRecurringItems(): Promise<RecurringExpense[]> {
+    await requireUserId();
+    const client = requireSupabase();
+    const { data, error } = await client
+      .from('recurring_items')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data.map(mapRecurringItem);
+  }
+
+  async createRecurringItem(input: RecurringItemDraft): Promise<RecurringExpense> {
+    const userId = await requireUserId();
+    const client = requireSupabase();
+    const insert: RecurringInsert = {
+      id: input.id,
+      user_id: userId,
+      name: input.name,
+      amount: input.amount,
+      cycle: input.cycle,
+      monthly_equivalent: input.monthlyEquiv ?? null,
+      category: input.category,
+      billing_day: input.billingDay ?? null,
+      active: input.active,
+      last_paid: input.lastPaid ?? null,
+      next_due: input.nextDue ?? null,
+      note: input.note ?? null,
+    };
+    const { data, error } = await client
+      .from('recurring_items')
+      .insert(insert)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return mapRecurringItem(data);
+  }
+
+  async updateRecurringItem(
+    id: string,
+    input: Partial<Omit<RecurringExpense, 'id' | 'account' | 'lastPaid'>> & {
+      lastPaid?: string | null;
+    },
+  ): Promise<RecurringExpense> {
+    await requireUserId();
+    const client = requireSupabase();
+    const update: RecurringUpdate = {
+      name: input.name,
+      amount: input.amount,
+      cycle: input.cycle,
+      monthly_equivalent: input.monthlyEquiv,
+      category: input.category,
+      billing_day: input.billingDay,
+      active: input.active,
+      last_paid: input.lastPaid,
+      next_due: input.nextDue,
+      note: input.note,
+    };
+    const { data, error } = await client
+      .from('recurring_items')
+      .update(update)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return mapRecurringItem(data);
+  }
+
+  async deleteRecurringItem(id: string): Promise<void> {
+    await requireUserId();
+    const client = requireSupabase();
+    const { error } = await client.from('recurring_items').delete().eq('id', id);
+    if (error) throw error;
   }
 
   async getUserSettings(): Promise<UserSettings> {

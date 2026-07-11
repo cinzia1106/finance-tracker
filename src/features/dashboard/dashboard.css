@@ -34,61 +34,92 @@
   color: var(--color-ink-70);
 }
 
-.dashboard__bar-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.dashboard__bar-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-}
-/* Group rows expand into their category breakdown (fixed-costs page folded in) */
-.dashboard__bar-toggle {
-  border: none;
-  background: transparent;
-  padding: 0;
-  font-family: var(--font-ui);
-  color: inherit;
-  cursor: pointer;
-  width: 100%;
-  align-items: baseline;
-}
-.dashboard__bar-caret {
-  margin-left: 6px;
-  font-size: 10px;
-  color: var(--color-ink-40);
-}
-.dashboard__group-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 6px 0 2px 12px;
-  border-left: 2px solid var(--color-hairline-soft);
-  margin-left: 2px;
-}
-.dashboard__group-detail-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
 .dashboard__group-note {
   letter-spacing: 0;
 }
 
-.dashboard__inbox-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  padding: 6px 0;
+/* 每月固定支出 — 自建清單＋繳費狀態 */
+.dashboard__fixed-header-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.dashboard__fixed-form {
+  padding-bottom: 4px;
   border-bottom: var(--border-hairline-soft);
 }
-.dashboard__inbox-link {
-  font-weight: 500;
-  color: var(--color-mint-deep);
-  margin-top: auto;
+.dashboard__fixed-error {
+  padding: 8px 12px;
+  border-radius: var(--radius-badge);
+  background: var(--color-apricot-tint);
+  color: var(--color-apricot-deep);
+}
+.dashboard__fixed-list {
+  display: flex;
+  flex-direction: column;
+}
+.dashboard__fixed-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px 76px auto;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: var(--border-hairline-soft);
+  font-size: 13px;
+}
+.dashboard__fixed-row:last-child {
+  border-bottom: none;
+}
+.dashboard__fixed-name {
+  min-width: 0;
+}
+.dashboard__fixed-meta {
+  letter-spacing: 0;
+  font-weight: 400;
+  color: var(--color-ink-40);
+}
+.dashboard__fixed-amount {
+  text-align: right;
+}
+.dashboard__fixed-badge {
+  padding: 2px 8px;
+  font-size: 11px;
+  justify-self: end;
+  white-space: nowrap;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-ui);
+}
+.dashboard__fixed-badge:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.dashboard__fixed-actions {
+  display: inline-flex;
+  gap: 6px;
+  justify-self: end;
+}
+.dashboard__fixed-danger {
+  border-color: var(--color-apricot-border);
+  color: var(--color-apricot-deep);
+}
+.dashboard__fixed-delete {
+  border: none;
+  background: transparent;
+  color: var(--color-ink-40);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  justify-self: end;
+  line-height: 1;
+}
+.dashboard__fixed-delete:hover {
+  color: var(--color-apricot-deep);
+  background: var(--color-apricot-tint);
+}
+.dashboard__fixed-empty {
+  line-height: 1.6;
 }
 
 .dashboard__card-link {

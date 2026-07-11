@@ -8,6 +8,7 @@ import type {
   AssetSnapshot,
   ImportBatch,
   LiabilitySnapshot,
+  RecurringExpense,
   Transaction,
   AccountType,
   UserSettings,
@@ -29,6 +30,9 @@ export type AssetSnapshotDraft = Omit<AssetSnapshot, 'id' | 'createdAt' | 'updat
 export type DebtSnapshotDraft = Omit<LiabilitySnapshot, 'id'> & {
   id?: string;
   accountId?: string | null;
+};
+export type RecurringItemDraft = Omit<RecurringExpense, 'id' | 'account'> & {
+  id?: string;
 };
 
 export interface ExpenseGroupSummary {
@@ -165,6 +169,15 @@ export interface DataAdapter {
   createDebtSnapshot?(input: DebtSnapshotDraft): Promise<LiabilitySnapshot>;
   getUserSettings?(): Promise<UserSettings>;
   updateUserSettings?(input: Partial<UserSettings>): Promise<UserSettings>;
+  listRecurringItems?(): Promise<RecurringExpense[]>;
+  createRecurringItem?(input: RecurringItemDraft): Promise<RecurringExpense>;
+  updateRecurringItem?(
+    id: string,
+    input: Partial<Omit<RecurringExpense, 'id' | 'account' | 'lastPaid'>> & {
+      lastPaid?: string | null;
+    },
+  ): Promise<RecurringExpense>;
+  deleteRecurringItem?(id: string): Promise<void>;
   createTransaction?(input: TransactionDraft): Promise<Transaction>;
   updateTransaction?(
     id: string,
