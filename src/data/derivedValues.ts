@@ -111,6 +111,16 @@ function accountTypeFor(tx: Transaction, accountsById: Map<string, Account>, acc
   return account?.type;
 }
 
+function isCreditCardExpense(
+  tx: Transaction,
+  accountsById: Map<string, Account>,
+  accountsByName: Map<string, Account>,
+) {
+  if (tx.type !== 'expense') return false;
+  if (accountTypeFor(tx, accountsById, accountsByName) === 'credit_card') return true;
+  return /信用卡|credit\s*card|card/i.test(`${tx.account} ${tx.note} ${tx.tags.join(' ')}`);
+}
+
 function isInvestmentAccount(account: Account | undefined) {
   return account?.type === 'virtual';
 }
@@ -204,7 +214,7 @@ function buildCreditCardSummary(
   );
   const accountsByName = new Map(accounts.map((account) => [account.name, account]));
   const charged = transactions
-    .filter((tx) => tx.type === 'expense' && accountTypeFor(tx, accountsById, accountsByName) === 'credit_card')
+    .filter((tx) => isCreditCardExpense(tx, accountsById, accountsByName))
     .reduce((total, tx) => total + tx.amount, 0);
   const latestDebt = latestByKey(debtSnapshots, (snapshot) => snapshot.account ?? snapshot.name)[0];
   const subscriptionRows = transactions.filter(
@@ -246,9 +256,9 @@ export function buildMonthOverview(input: {
     .sort((a, b) => b.amount - a.amount);
   const groupedExpense = groupTransactions(expenseRows, (tx) => categoryGroupFor(tx.category));
   const expenseGroups = [
-    { key: 'fixed' as const, label: 'Fixed', amount: sum(groupedExpense.get('fixed') ?? []) },
-    { key: 'variable' as const, label: 'Variable', amount: sum(groupedExpense.get('variable') ?? []) },
-    { key: 'growth' as const, label: 'Growth', amount: sum(groupedExpense.get('growth') ?? []) },
+    { key: 'fixed' as const, label: '固定承諾', amount: sum(groupedExpense.get('fixed') ?? []) },
+    { key: 'variable' as const, label: '日常變動', amount: sum(groupedExpense.get('variable') ?? []) },
+    { key: 'growth' as const, label: '投資自己', amount: sum(groupedExpense.get('growth') ?? []) },
   ];
   const budgets = budgetedExpenseCategories().map((category) => ({
     category: category.name,

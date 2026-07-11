@@ -133,12 +133,15 @@
   font-size: 15px;
 }
 
-/* Recent-transactions table columns (desktop) */
+/* Recent-transactions table columns (desktop) — fixed account track so
+   per-row grids stay column-aligned */
 .dashboard__tx-grid {
-  grid-template-columns: 64px 72px 1fr minmax(150px, auto) 110px 76px;
+  grid-template-columns: 64px 72px 1fr 200px 110px 76px;
 }
 .dashboard__tx-account {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12px;
 }
 

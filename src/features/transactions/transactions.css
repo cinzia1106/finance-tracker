@@ -15,9 +15,11 @@
 .tx-table {
   overflow-x: auto;
 }
+/* Account column is FIXED width: every row is its own grid, so an auto
+   track would resolve per-row and shift the other columns out of line. */
 .tx-grid {
-  grid-template-columns: 48px 40px 72px minmax(160px, 1fr) minmax(140px, 0.5fr) minmax(150px, auto) 96px 52px 28px;
-  min-width: 900px;
+  grid-template-columns: 48px 40px 72px minmax(150px, 1fr) minmax(150px, 0.6fr) 220px 96px 52px 28px;
+  min-width: 960px;
 }
 .tx-grid.data-table__row {
   padding: 7px 0;
@@ -109,16 +111,6 @@
   align-items: center;
   min-height: 20px;
 }
-.tx-subtag--edit {
-  min-width: 24px;
-  justify-content: center;
-  padding: 0 4px;
-  flex-shrink: 0;
-  margin-left: auto; /* pin to the right edge of the tags column */
-}
-.tx-tags {
-  width: 100%;
-}
 .tx-subtag {
   display: inline-flex;
   align-items: center;
@@ -146,14 +138,6 @@
 .tx-subtag:disabled {
   opacity: 0.5;
   cursor: default;
-}
-.tx-subtag--edit {
-  border-style: dashed;
-  color: var(--color-ink-40);
-}
-.tx-subtag--edit:hover {
-  color: var(--color-mint-deep);
-  border-color: var(--color-mint-border);
 }
 
 .tx-edit-error {
@@ -254,9 +238,11 @@
   font-size: 13px;
 }
 
-/* Transfer route stays complete on a single line (column sizes to content) */
+/* Transfer route stays complete on a single line within the fixed column */
 .tx-account--wrap {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12px;
   color: var(--color-ink-70);
 }
@@ -304,8 +290,8 @@
     display: none;
   }
   .tx-grid {
-    grid-template-columns: 48px 40px 72px minmax(160px, 1fr) minmax(150px, auto) 96px 52px 28px;
-    min-width: 720px;
+    grid-template-columns: 48px 40px 72px minmax(150px, 1fr) 200px 96px 52px 28px;
+    min-width: 800px;
   }
 }
 

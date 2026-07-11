@@ -76,7 +76,6 @@ export default function TransactionsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
-  const [tagEditorId, setTagEditorId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('');
   const [noteEditId, setNoteEditId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
@@ -366,16 +365,13 @@ export default function TransactionsPage() {
     );
   }
 
-  /** Tags cell: active tags as removable chips; ＋ expands the category's
-      full tag options inline (row grows while editing, nothing clips). */
+  /** Tags cell: all category tags stay visible so each row can hold multiple tags. */
   function renderTags(tx: Transaction) {
     const options = categoryTags(tx);
-    const editing = tagEditorId === tx.id;
-    const shown = editing ? [...new Set([...options, ...tx.tags])] : tx.tags;
+    const shown = [...new Set([...options, ...tx.tags])];
     if (shown.length === 0 && options.length === 0) return null;
     return (
       <span className="tx-tags">
-        {/* Active tags hug the column's left edge; ＋ pins to the right */}
         {shown.map((tag) => (
           <button
             key={tag}
@@ -387,16 +383,6 @@ export default function TransactionsPage() {
             {tag}
           </button>
         ))}
-        {options.length > 0 && (
-          <button
-            type="button"
-            className="tx-subtag tx-subtag--edit"
-            onClick={() => setTagEditorId(editing ? null : tx.id)}
-            aria-label={editing ? '完成編輯標籤' : '編輯標籤'}
-          >
-            {editing ? '完成' : '＋'}
-          </button>
-        )}
       </span>
     );
   }

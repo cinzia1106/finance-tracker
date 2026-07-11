@@ -8,10 +8,10 @@ export interface CategoryDefinition {
 }
 
 export const CATEGORY_DEFINITIONS: CategoryDefinition[] = [
-  { name: '生活', kind: 'expense', group: 'variable', budget: null },
-  { name: '交通', kind: 'expense', group: 'variable', budget: null },
-  { name: '娛樂', kind: 'expense', group: 'variable', budget: null },
-  { name: '其他', kind: 'expense', group: 'variable', budget: null },
+  { name: '生活', kind: 'expense', group: 'variable', budget: 11500 },
+  { name: '交通', kind: 'expense', group: 'variable', budget: 1500 },
+  { name: '娛樂', kind: 'expense', group: 'variable', budget: 3000 },
+  { name: '其他', kind: 'expense', group: 'variable', budget: 1000 },
   { name: '健康', kind: 'expense', group: 'growth', budget: null },
   { name: '工作', kind: 'expense', group: 'growth', budget: null },
   { name: '成長', kind: 'expense', group: 'growth', budget: null },
