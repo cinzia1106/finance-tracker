@@ -107,6 +107,13 @@
   flex-wrap: wrap;
   gap: 3px 4px;
   align-items: center;
+  min-height: 20px;
+}
+.tx-subtag--edit {
+  min-width: 24px;
+  justify-content: center;
+  padding: 0 4px;
+  flex-shrink: 0;
 }
 .tx-subtag {
   display: inline-flex;
