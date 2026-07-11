@@ -5,18 +5,36 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { useAdapter } from '../../data/AdapterContext';
+import { DEFAULT_DASHBOARD_BUDGETS } from '../../data/categoryDefinitions';
+
+const BUDGET_CATEGORIES = Object.keys(DEFAULT_DASHBOARD_BUDGETS);
 
 export default function SettingsPage() {
   const { signOut } = useAuth();
   const adapter = useAdapter();
   const [emergencyFundMonths, setEmergencyFundMonths] = useState('3');
+  const [dashboardBudgets, setDashboardBudgets] = useState<Record<string, string>>(
+    Object.fromEntries(
+      BUDGET_CATEGORIES.map((category) => [category, String(DEFAULT_DASHBOARD_BUDGETS[category])]),
+    ),
+  );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     adapter.getUserSettings?.().then((settings) => {
-      if (!cancelled) setEmergencyFundMonths(String(settings.emergencyFundMonths));
+      if (cancelled) return;
+      setEmergencyFundMonths(String(settings.emergencyFundMonths));
+      const budgets = settings.dashboardBudgets ?? DEFAULT_DASHBOARD_BUDGETS;
+      setDashboardBudgets(
+        Object.fromEntries(
+          BUDGET_CATEGORIES.map((category) => [
+            category,
+            String(budgets[category] ?? DEFAULT_DASHBOARD_BUDGETS[category]),
+          ]),
+        ),
+      );
     });
     return () => {
       cancelled = true;
@@ -30,8 +48,23 @@ export default function SettingsPage() {
     setSaved(false);
     try {
       const months = Math.max(1, Math.min(Number(emergencyFundMonths) || 3, 24));
-      const settings = await adapter.updateUserSettings({ emergencyFundMonths: months });
+      const budgets = Object.fromEntries(
+        BUDGET_CATEGORIES.map((category) => [
+          category,
+          Math.max(0, Math.round(Number(dashboardBudgets[category]) || 0)),
+        ]),
+      );
+      const settings = await adapter.updateUserSettings({
+        emergencyFundMonths: months,
+        dashboardBudgets: budgets,
+      });
       setEmergencyFundMonths(String(settings.emergencyFundMonths));
+      const savedBudgets = settings.dashboardBudgets ?? budgets;
+      setDashboardBudgets(
+        Object.fromEntries(
+          BUDGET_CATEGORIES.map((category) => [category, String(savedBudgets[category] ?? budgets[category])]),
+        ),
+      );
       setSaved(true);
     } finally {
       setSaving(false);
@@ -89,6 +122,41 @@ export default function SettingsPage() {
                 onChange={(event) => setEmergencyFundMonths(event.target.value)}
               />
             </label>
+            <div className="form-actions">
+              <button type="submit" className="btn btn--primary" disabled={saving}>
+                儲存設定
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="card span-6">
+          <div className="card__header">
+            <h2 className="h2">總覽預算</h2>
+            {saved && <span className="micro" style={{ color: 'var(--color-mint-deep)', letterSpacing: 0 }}>已儲存</span>}
+          </div>
+          <p className="caption" style={{ lineHeight: 1.7 }}>
+            這些數字會用在總覽的變動預算卡；支出仍由交易分類與標籤自動計算。
+          </p>
+          <form onSubmit={saveSettings} className="form-grid">
+            {BUDGET_CATEGORIES.map((category) => (
+              <label key={category} className="form-field">
+                <span className="micro">{category}</span>
+                <input
+                  className="text-input mono"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={dashboardBudgets[category] ?? ''}
+                  onChange={(event) =>
+                    setDashboardBudgets((current) => ({
+                      ...current,
+                      [category]: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            ))}
             <div className="form-actions">
               <button type="submit" className="btn btn--primary" disabled={saving}>
                 儲存設定

@@ -1,5 +1,6 @@
 import type { DataAdapter } from '../../data/adapter';
-import { categoryGroupFor } from '../../data/categoryDefinitions';
+import { categoryGroupForTransaction } from '../../data/categoryDefinitions';
+import { reconcileDebtSnapshot } from '../../data/derivedValues';
 import type { AssetSnapshot, LiabilitySnapshot, Transaction } from '../../types/models';
 
 export interface CategoryAmount {
@@ -70,21 +71,25 @@ function endOfMonth(year: number, month: number) {
 
 function groupByCategory(rows: Transaction[], includeGroup = false) {
   const map = new Map<string, number>();
+  const groupByCategoryName = new Map<string, CategoryGroupAmount['group']>();
   for (const tx of rows) {
     const category = tx.category || 'Uncategorized';
     map.set(category, (map.get(category) ?? 0) + tx.amount);
+    if (includeGroup && !groupByCategoryName.has(category)) {
+      groupByCategoryName.set(category, classifyCategoryGroup(tx));
+    }
   }
   return [...map.entries()]
     .map(([category, amount]) => ({
       category,
       amount,
-      group: includeGroup ? classifyCategoryGroup(category) : undefined,
+      group: includeGroup ? groupByCategoryName.get(category) : undefined,
     }))
     .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
 }
 
-function classifyCategoryGroup(category: string): CategoryGroupAmount['group'] {
-  const group = categoryGroupFor(category);
+function classifyCategoryGroup(tx: Transaction): CategoryGroupAmount['group'] {
+  const group = categoryGroupForTransaction(tx);
   if (group === 'fixed') return 'fixed';
   if (group === 'growth') return 'self-investment';
   return 'variable';
@@ -98,7 +103,7 @@ function categoryGroups(expenseRows: Transaction[]) {
   ];
 
   for (const tx of expenseRows) {
-    const group = classifyCategoryGroup(tx.category);
+    const group = classifyCategoryGroup(tx);
     const row = groups.find((item) => item.group === group);
     if (row) row.amount += tx.amount;
   }
@@ -189,16 +194,21 @@ export async function buildMonthlyReviewData(
   }
 
   const prev = previousMonth(year, month);
-  const [transactions, previousTransactions, assetSnapshots, debtSnapshots] = await Promise.all([
+  const monthEnd = endOfMonth(year, month);
+  const [transactions, previousTransactions, allTransactions, assetSnapshots, debtSnapshots] = await Promise.all([
     adapter.listTransactions(year, month),
     adapter.listTransactions(prev.year, prev.month),
-    adapter.listAssetSnapshots?.(endOfMonth(year, month)) ?? Promise.resolve([]),
-    adapter.listDebtSnapshots?.(endOfMonth(year, month)) ?? Promise.resolve([]),
+    adapter.listTransactions(),
+    adapter.listAssetSnapshots?.(monthEnd) ?? Promise.resolve([]),
+    adapter.listDebtSnapshots?.(monthEnd) ?? Promise.resolve([]),
   ]);
 
   const current = summarizeTransactions(transactions);
   const previous = summarizeTransactions(previousTransactions);
-  const assetSummary = buildAssetSummary(assetSnapshots, debtSnapshots, current.expense);
+  const reconciledDebtSnapshots = debtSnapshots.map((snapshot) =>
+    reconcileDebtSnapshot(snapshot, allTransactions, monthEnd),
+  );
+  const assetSummary = buildAssetSummary(assetSnapshots, reconciledDebtSnapshots, current.expense);
 
   return {
     year,

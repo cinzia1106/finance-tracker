@@ -18,7 +18,6 @@ const PRIMARY_NAV = [
 
 const MANAGEMENT_NAV = [
   { to: '/inbox', label: '待確認', withBadge: true },
-  { to: '/recurring', label: '固定支出' },
   { to: '/investments', label: '投資' },
   { to: '/monthly-review', label: '月報' },
   { to: '/settings', label: '設定' },

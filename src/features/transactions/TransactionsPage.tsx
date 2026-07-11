@@ -211,9 +211,7 @@ export default function TransactionsPage() {
     // Read the freshest row from state: a second toggle fired before the
     // re-render must build on the first one, not overwrite it.
     const current = (transactions ?? []).find((row) => row.id === tx.id) ?? tx;
-    const tags = current.tags.includes(tag)
-      ? current.tags.filter((t) => t !== tag)
-      : [...current.tags, tag];
+    const tags = current.tags.includes(tag) ? [] : [tag];
     setSavingId(tx.id);
     setEditError(null);
     try {
@@ -365,7 +363,7 @@ export default function TransactionsPage() {
     );
   }
 
-  /** Tags cell: all category tags stay visible so each row can hold multiple tags. */
+  /** Tags cell: one active tag per transaction. Clicking another tag replaces it. */
   function renderTags(tx: Transaction) {
     const options = categoryTags(tx);
     const shown = [...new Set([...options, ...tx.tags])];

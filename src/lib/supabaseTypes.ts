@@ -215,18 +215,21 @@ export interface Database {
         Row: {
           user_id: string;
           emergency_fund_months: number;
+          dashboard_budgets: Json;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           user_id: string;
           emergency_fund_months?: number;
+          dashboard_budgets?: Json;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           user_id?: string;
           emergency_fund_months?: number;
+          dashboard_budgets?: Json;
           created_at?: string;
           updated_at?: string;
         };

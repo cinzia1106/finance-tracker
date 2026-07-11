@@ -9,6 +9,7 @@ import type {
   TransactionDraft,
 } from './adapter';
 import { buildAssetOverview, buildMonthOverview } from './derivedValues';
+import { DEFAULT_DASHBOARD_BUDGETS } from './categoryDefinitions';
 import { requireSupabase } from '../lib/supabaseClient';
 import type { Database, Json } from '../lib/supabaseTypes';
 import type { Account, AssetSnapshot, ImportBatch, LiabilitySnapshot, Transaction, UserSettings } from '../types/models';
@@ -28,6 +29,8 @@ type DebtSnapshotRow = Database['public']['Tables']['debt_snapshots']['Row'];
 type DebtSnapshotInsert = Database['public']['Tables']['debt_snapshots']['Insert'];
 type UserSettingsRow = Database['public']['Tables']['user_settings']['Row'];
 type SyncEventInsert = Database['public']['Tables']['sync_events']['Insert'];
+
+const LOCAL_SETTINGS_KEY = 'finance-tracker:user-settings';
 
 function monthDateRange(year: number, month: number) {
   const start = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -119,9 +122,41 @@ function mapDebtSnapshot(row: DebtSnapshotRow): LiabilitySnapshot {
   };
 }
 
+function parseBudgetSettings(value: Json | undefined): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return DEFAULT_DASHBOARD_BUDGETS;
+  const result: Record<string, number> = { ...DEFAULT_DASHBOARD_BUDGETS };
+  for (const [category, raw] of Object.entries(value)) {
+    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) continue;
+    result[category] = Math.round(raw);
+  }
+  return result;
+}
+
+function localSettings(): Partial<UserSettings> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(LOCAL_SETTINGS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<UserSettings>;
+    return {
+      emergencyFundMonths: parsed.emergencyFundMonths,
+      dashboardBudgets: parsed.dashboardBudgets,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function saveLocalSettings(settings: Partial<UserSettings>) {
+  if (typeof window === 'undefined') return;
+  const current = localSettings();
+  window.localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify({ ...current, ...settings }));
+}
+
 function mapUserSettings(row: UserSettingsRow): UserSettings {
   return {
     emergencyFundMonths: row.emergency_fund_months,
+    dashboardBudgets: parseBudgetSettings(row.dashboard_budgets),
   };
 }
 
@@ -130,6 +165,13 @@ function isMissingUserSettings(error: unknown) {
   const message = 'message' in error ? String((error as { message?: unknown }).message ?? '') : '';
   const code = 'code' in error ? String((error as { code?: unknown }).code ?? '') : '';
   return code === '42P01' || /user_settings|schema cache|does not exist/i.test(message);
+}
+
+function isMissingSettingsColumn(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const message = 'message' in error ? String((error as { message?: unknown }).message ?? '') : '';
+  const code = 'code' in error ? String((error as { code?: unknown }).code ?? '') : '';
+  return code === '42703' || code === 'PGRST204' || /dashboard_budgets|schema cache|column/i.test(message);
 }
 
 export async function requireUserId() {
@@ -297,6 +339,7 @@ export class SupabaseDataAdapter implements DataAdapter {
   async getUserSettings(): Promise<UserSettings> {
     const userId = await requireUserId();
     const client = requireSupabase();
+    const local = localSettings();
     const { data, error } = await client
       .from('user_settings')
       .select('*')
@@ -304,10 +347,25 @@ export class SupabaseDataAdapter implements DataAdapter {
       .maybeSingle();
 
     if (error) {
-      if (isMissingUserSettings(error)) return { emergencyFundMonths: 3 };
+      if (isMissingUserSettings(error)) {
+        return {
+          emergencyFundMonths: local.emergencyFundMonths ?? 3,
+          dashboardBudgets: { ...DEFAULT_DASHBOARD_BUDGETS, ...(local.dashboardBudgets ?? {}) },
+        };
+      }
       throw error;
     }
-    if (data) return mapUserSettings(data);
+    if (data) {
+      const remote = mapUserSettings(data);
+      return {
+        ...remote,
+        ...local,
+        dashboardBudgets: {
+          ...remote.dashboardBudgets,
+          ...(local.dashboardBudgets ?? {}),
+        },
+      };
+    }
 
     const created = await client
       .from('user_settings')
@@ -315,22 +373,44 @@ export class SupabaseDataAdapter implements DataAdapter {
       .select('*')
       .single();
     if (created.error) throw created.error;
-    return mapUserSettings(created.data);
+    const remote = mapUserSettings(created.data);
+    return {
+      ...remote,
+      ...local,
+      dashboardBudgets: {
+        ...remote.dashboardBudgets,
+        ...(local.dashboardBudgets ?? {}),
+      },
+    };
   }
 
   async updateUserSettings(input: Partial<UserSettings>): Promise<UserSettings> {
     const userId = await requireUserId();
     const client = requireSupabase();
+    if (input.dashboardBudgets) saveLocalSettings({ dashboardBudgets: input.dashboardBudgets });
+    if (input.emergencyFundMonths) saveLocalSettings({ emergencyFundMonths: input.emergencyFundMonths });
+    const current = await this.getUserSettings();
+    const nextSettings: UserSettings = {
+      emergencyFundMonths: input.emergencyFundMonths ?? current.emergencyFundMonths,
+      dashboardBudgets: {
+        ...(current.dashboardBudgets ?? DEFAULT_DASHBOARD_BUDGETS),
+        ...(input.dashboardBudgets ?? {}),
+      },
+    };
     const { data, error } = await client
       .from('user_settings')
       .upsert({
         user_id: userId,
-        emergency_fund_months: input.emergencyFundMonths ?? 3,
+        emergency_fund_months: nextSettings.emergencyFundMonths,
+        dashboard_budgets: nextSettings.dashboardBudgets as Json,
       })
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (isMissingSettingsColumn(error) || isMissingUserSettings(error)) return nextSettings;
+      throw error;
+    }
     return mapUserSettings(data);
   }
 

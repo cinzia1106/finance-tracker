@@ -130,4 +130,5 @@ export interface AssetSnapshot {
 
 export interface UserSettings {
   emergencyFundMonths: number;
+  dashboardBudgets?: Record<string, number>;
 }

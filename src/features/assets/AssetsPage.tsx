@@ -48,6 +48,55 @@ function convertToTwd(value: string, rate: string) {
   return Math.round(amount * exchangeRate);
 }
 
+function addMonths(date: string, months: number) {
+  const result = new Date(`${date}T00:00:00`);
+  result.setMonth(result.getMonth() + months);
+  return result.toISOString().slice(0, 10);
+}
+
+function monthsBetween(start: string, end: string) {
+  const startDate = new Date(`${start}T00:00:00`);
+  const endDate = new Date(`${end}T00:00:00`);
+  const monthDiff =
+    (endDate.getFullYear() - startDate.getFullYear()) * 12 +
+    (endDate.getMonth() - startDate.getMonth());
+  return endDate.getDate() >= startDate.getDate() ? monthDiff : monthDiff - 1;
+}
+
+function calculateDebtSchedule(input: {
+  totalAmount: string;
+  installments: string;
+  remainingInstallments?: string;
+  startDate: string;
+  snapshotDate: string;
+}) {
+  const totalAmount = Math.max(0, Math.round(Number(input.totalAmount) || 0));
+  const installments = Math.max(1, Math.round(Number(input.installments) || 1));
+  const monthlyPayment = Math.ceil(totalAmount / installments);
+  const manualRemaining = input.remainingInstallments
+    ? Math.max(0, Math.min(Math.round(Number(input.remainingInstallments) || 0), installments))
+    : null;
+  const paidInstallments =
+    manualRemaining === null
+      ? Math.min(Math.max(monthsBetween(input.startDate, input.snapshotDate), 0), installments)
+      : installments - manualRemaining;
+  const remainingInstallments =
+    manualRemaining === null ? Math.max(installments - paidInstallments, 0) : manualRemaining;
+  const remainingBalance =
+    remainingInstallments === 0 ? 0 : Math.min(monthlyPayment * remainingInstallments, totalAmount);
+  const nextDueDate = remainingInstallments > 0 ? addMonths(input.startDate, paidInstallments) : undefined;
+
+  return {
+    totalAmount,
+    installments,
+    monthlyPayment,
+    paidInstallments,
+    remainingInstallments,
+    remainingBalance,
+    nextDueDate,
+  };
+}
+
 export default function AssetsPage() {
   const adapter = useAdapter();
   const [data, setData] = useState<AssetOverview | null>(null);
@@ -81,8 +130,10 @@ export default function AssetsPage() {
     accountId: '',
     name: '',
     date: new Date().toISOString().slice(0, 10),
-    remainingBalance: '',
-    nextDueDate: '',
+    totalAmount: '',
+    installments: '',
+    remainingInstallments: '',
+    startDate: new Date().toISOString().slice(0, 10),
   });
 
   async function load() {
@@ -226,7 +277,16 @@ export default function AssetsPage() {
 
   async function saveDebtSnapshot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!adapter.createDebtSnapshot || !debtForm.name.trim() || !debtForm.remainingBalance) return;
+    if (!adapter.createDebtSnapshot || !debtForm.name.trim() || !debtForm.totalAmount || !debtForm.installments) {
+      return;
+    }
+    const schedule = calculateDebtSchedule({
+      totalAmount: debtForm.totalAmount,
+      installments: debtForm.installments,
+      remainingInstallments: debtForm.remainingInstallments,
+      startDate: debtForm.startDate,
+      snapshotDate: debtForm.date,
+    });
     setSaving(true);
     setMessage(null);
     try {
@@ -234,11 +294,18 @@ export default function AssetsPage() {
         accountId: debtForm.accountId || null,
         name: debtForm.name.trim(),
         date: debtForm.date,
-        remainingBalance: Number(debtForm.remainingBalance),
-        nextDueDate: debtForm.nextDueDate || undefined,
+        remainingBalance: schedule.remainingBalance,
+        monthlyPayment: schedule.monthlyPayment,
+        nextDueDate: schedule.nextDueDate,
         source: 'manual_check',
+        note: `total=${schedule.totalAmount}; installments=${schedule.installments}; start=${debtForm.startDate}; paid=${schedule.paidInstallments}; remaining_installments=${schedule.remainingInstallments}`,
       });
-      setDebtForm((current) => ({ ...current, remainingBalance: '', nextDueDate: '' }));
+      setDebtForm((current) => ({
+        ...current,
+        totalAmount: '',
+        installments: '',
+        remainingInstallments: '',
+      }));
       setMessage('負債快照已儲存。');
       await load();
     } catch (error) {
@@ -266,6 +333,16 @@ export default function AssetsPage() {
   const hasAccounts = accounts.length > 0;
   const selectedAssetAccount = accounts.find((account) => account.id === assetForm.accountId);
   const selectedAssetCurrency = accountCurrency(selectedAssetAccount);
+  const debtSchedule =
+    debtForm.totalAmount && debtForm.installments
+      ? calculateDebtSchedule({
+          totalAmount: debtForm.totalAmount,
+          installments: debtForm.installments,
+          remainingInstallments: debtForm.remainingInstallments,
+          startDate: debtForm.startDate,
+          snapshotDate: debtForm.date,
+        })
+      : null;
 
   return (
     <>
@@ -907,31 +984,65 @@ export default function AssetsPage() {
               />
             </label>
             <label className="form-field">
-              <span className="micro">剩餘金額</span>
+              <span className="micro">總金額</span>
               <input
                 className="text-input mono"
                 type="number"
                 placeholder="0"
-                value={debtForm.remainingBalance}
+                min="0"
+                value={debtForm.totalAmount}
                 onChange={(event) =>
-                  setDebtForm({ ...debtForm, remainingBalance: event.target.value })
+                  setDebtForm({ ...debtForm, totalAmount: event.target.value })
                 }
               />
             </label>
             <label className="form-field">
-              <span className="micro">下次扣款（選填）</span>
+              <span className="micro">期數</span>
+              <input
+                className="text-input mono"
+                type="number"
+                min="1"
+                step="1"
+                placeholder="12"
+                value={debtForm.installments}
+                onChange={(event) => setDebtForm({ ...debtForm, installments: event.target.value })}
+              />
+            </label>
+            <label className="form-field">
+              <span className="micro">起始日期</span>
               <input
                 className="text-input"
                 type="date"
-                value={debtForm.nextDueDate}
-                onChange={(event) => setDebtForm({ ...debtForm, nextDueDate: event.target.value })}
+                value={debtForm.startDate}
+                onChange={(event) => setDebtForm({ ...debtForm, startDate: event.target.value })}
               />
             </label>
+            <label className="form-field">
+              <span className="micro">剩餘期數（選填）</span>
+              <input
+                className="text-input mono"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="自動推算"
+                value={debtForm.remainingInstallments}
+                onChange={(event) =>
+                  setDebtForm({ ...debtForm, remainingInstallments: event.target.value })
+                }
+              />
+            </label>
+            {debtSchedule && (
+              <div className="caption assets__empty-note form-field--wide">
+                月付約 {formatPlain(debtSchedule.monthlyPayment)} · 剩餘{' '}
+                {debtSchedule.remainingInstallments} 期 · {formatPlain(debtSchedule.remainingBalance)} · 下期{' '}
+                {debtSchedule.nextDueDate ?? '已結清'}
+              </div>
+            )}
             <div className="form-actions">
               <button
                 type="submit"
                 className="btn btn--primary"
-                disabled={saving || !debtForm.name.trim() || !debtForm.remainingBalance}
+                disabled={saving || !debtForm.name.trim() || !debtForm.totalAmount || !debtForm.installments}
               >
                 儲存負債
               </button>

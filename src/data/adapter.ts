@@ -89,7 +89,7 @@ export interface TransactionRow {
 export interface InboxPreviewItem {
   note: string;
   amount: number;
-  type: 'expense' | 'income';
+  type: 'expense' | 'income' | 'transfer';
 }
 
 export interface MonthOverview {

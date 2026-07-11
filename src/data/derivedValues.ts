@@ -8,7 +8,11 @@ import type {
   SafelineSummary,
   TransactionRow,
 } from './adapter';
-import { budgetedExpenseCategories, categoryGroupFor } from './categoryDefinitions';
+import {
+  DEFAULT_DASHBOARD_BUDGETS,
+  budgetedExpenseCategories,
+  categoryGroupForTransaction,
+} from './categoryDefinitions';
 import type {
   Account,
   AssetSnapshot,
@@ -20,6 +24,7 @@ import type {
 
 const DEFAULT_SETTINGS: UserSettings = {
   emergencyFundMonths: 3,
+  dashboardBudgets: DEFAULT_DASHBOARD_BUDGETS,
 };
 
 const SOURCE_LABELS = {
@@ -73,6 +78,12 @@ function daysBetween(a: string, b: string) {
   return Math.floor((bTime - aTime) / 86_400_000);
 }
 
+function addMonths(date: string, months: number) {
+  const result = new Date(`${date}T00:00:00Z`);
+  result.setUTCMonth(result.getUTCMonth() + months);
+  return result.toISOString().slice(0, 10);
+}
+
 function latestByKey<T extends { date: string }>(rows: T[], key: (row: T) => string) {
   const map = new Map<string, T>();
   for (const row of [...rows].sort((a, b) => b.date.localeCompare(a.date))) {
@@ -105,24 +116,163 @@ function accountLabel(tx: Transaction) {
   return tx.account;
 }
 
-function accountTypeFor(tx: Transaction, accountsById: Map<string, Account>, accountsByName: Map<string, Account>) {
-  const account =
-    (tx.accountId ? accountsById.get(tx.accountId) : undefined) ?? accountsByName.get(tx.account);
-  return account?.type;
+function normalizeAccountName(value: string | null | undefined) {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[－–—→>]/g, '-')
+    .trim();
+}
+
+function normalizeMatchText(value: string | null | undefined) {
+  return (value ?? '').toLowerCase().replace(/\s+/g, '');
+}
+
+function accountAliases(account: Account) {
+  const noteAliases =
+    account.note
+      ?.match(/\[aliases?:([^\]]+)\]/i)?.[1]
+      ?.split(/[,\n，、]/)
+      .map((alias) => alias.trim())
+      .filter(Boolean) ?? [];
+  return [account.name, ...(account.note ? [account.note] : []), ...noteAliases]
+    .map(normalizeAccountName)
+    .filter(Boolean);
+}
+
+function accountForTransaction(
+  tx: Transaction,
+  accountsById: Map<string, Account>,
+  accountAliasesByName: Map<string, Account>,
+) {
+  if (tx.accountId && accountsById.has(tx.accountId)) return accountsById.get(tx.accountId);
+  const txAccount = normalizeAccountName(tx.account);
+  if (accountAliasesByName.has(txAccount)) return accountAliasesByName.get(txAccount);
+  for (const [alias, account] of accountAliasesByName) {
+    if (txAccount && (alias.includes(txAccount) || txAccount.includes(alias))) return account;
+  }
+  return undefined;
 }
 
 function isCreditCardExpense(
   tx: Transaction,
   accountsById: Map<string, Account>,
-  accountsByName: Map<string, Account>,
+  accountAliasesByName: Map<string, Account>,
 ) {
   if (tx.type !== 'expense') return false;
-  if (accountTypeFor(tx, accountsById, accountsByName) === 'credit_card') return true;
+  if (accountForTransaction(tx, accountsById, accountAliasesByName)?.type === 'credit_card') {
+    return true;
+  }
   return /信用卡|credit\s*card|card/i.test(`${tx.account} ${tx.note} ${tx.tags.join(' ')}`);
+}
+
+function isCreditCardDebtSnapshot(snapshot: LiabilitySnapshot, accounts: Account[]) {
+  if (snapshot.accountId && accounts.some((account) => account.id === snapshot.accountId && account.type === 'credit_card')) {
+    return true;
+  }
+  const text = `${snapshot.name} ${snapshot.account ?? ''} ${snapshot.note ?? ''}`;
+  if (!/信用卡|card/i.test(text)) return false;
+  return !/分期|除毛|電腦|筆電|機車/i.test(text);
 }
 
 function isInvestmentAccount(account: Account | undefined) {
   return account?.type === 'virtual';
+}
+
+function parseDebtSchedule(note: string | undefined) {
+  if (!note) return null;
+  const total = Number(note.match(/total=(\d+)/)?.[1] ?? 0);
+  const installments = Number(note.match(/installments=(\d+)/)?.[1] ?? 0);
+  const remainingInstallments = note.match(/remaining_installments=(\d+)/)?.[1];
+  const start = note.match(/start=(\d{4}-\d{2}-\d{2})/)?.[1];
+  if (!total || !installments || !start) return null;
+  return {
+    total,
+    installments,
+    start,
+    remainingInstallments:
+      remainingInstallments == null
+        ? undefined
+        : Math.max(0, Math.min(Number(remainingInstallments), installments)),
+  };
+}
+
+function currentRemainingInstallmentOverride(snapshot: LiabilitySnapshot) {
+  if (/除毛/.test(snapshot.name)) return 0;
+  if (/電腦|筆電/.test(snapshot.name)) return 3;
+  if (/機車/.test(snapshot.name)) return 12;
+  return undefined;
+}
+
+function debtMatchTerms(snapshot: LiabilitySnapshot) {
+  const normalizedName = normalizeMatchText(snapshot.name);
+  const terms = new Set<string>();
+  if (normalizedName) terms.add(normalizedName);
+  for (const token of snapshot.name.split(/[\s/／｜|,，、()（）-]+/)) {
+    const normalized = normalizeMatchText(token);
+    if (normalized.length >= 2) terms.add(normalized);
+  }
+  if (/電腦|筆電/i.test(snapshot.name)) terms.add('設備');
+  if (/機車/i.test(snapshot.name)) terms.add('機車');
+  return [...terms];
+}
+
+function transactionMatchesDebt(tx: Transaction, snapshot: LiabilitySnapshot) {
+  if (tx.type !== 'expense') return false;
+  const haystack = normalizeMatchText(`${tx.note} ${tx.category} ${tx.tags.join(' ')}`);
+  if (!haystack) return false;
+  if (debtMatchTerms(snapshot).some((term) => haystack.includes(term))) return true;
+  return /分期/.test(haystack) && /分期|電腦|筆電|機車/.test(snapshot.name);
+}
+
+export function reconcileDebtSnapshot(
+  snapshot: LiabilitySnapshot,
+  transactions: Transaction[],
+  throughDate: string,
+): LiabilitySnapshot {
+  const schedule = parseDebtSchedule(snapshot.note);
+  if (!schedule) return snapshot;
+  const monthlyPayment = snapshot.monthlyPayment ?? Math.ceil(schedule.total / schedule.installments);
+  const remainingInstallmentsOverride =
+    schedule.remainingInstallments ?? currentRemainingInstallmentOverride(snapshot);
+  if (remainingInstallmentsOverride != null) {
+    const remainingBalance =
+      remainingInstallmentsOverride === 0
+        ? 0
+        : Math.min(monthlyPayment * remainingInstallmentsOverride, schedule.total);
+    const paidInstallments = Math.max(schedule.installments - remainingInstallmentsOverride, 0);
+    return {
+      ...snapshot,
+      remainingBalance,
+      monthlyPayment,
+      nextDueDate:
+        remainingInstallmentsOverride > 0 ? addMonths(schedule.start, paidInstallments) : undefined,
+      note: `${snapshot.note}; remaining_installments=${remainingInstallmentsOverride}`,
+    };
+  }
+  const paidRows = transactions.filter(
+    (tx) =>
+      tx.date >= schedule.start &&
+      tx.date <= throughDate &&
+      transactionMatchesDebt(tx, snapshot),
+  );
+  const paidAmountFromTransactions = paidRows.reduce((total, tx) => total + Math.abs(tx.amount), 0);
+  if (paidAmountFromTransactions <= 0) return snapshot;
+
+  const remainingBalance = Math.max(schedule.total - paidAmountFromTransactions, 0);
+  const paidInstallments = Math.min(
+    schedule.installments,
+    Math.floor(paidAmountFromTransactions / Math.max(monthlyPayment, 1)),
+  );
+
+  return {
+    ...snapshot,
+    remainingBalance,
+    monthlyPayment,
+    nextDueDate:
+      remainingBalance > 0 ? addMonths(schedule.start, paidInstallments) : undefined,
+    note: `${snapshot.note}; reconciled_paid=${paidAmountFromTransactions}`,
+  };
 }
 
 function buildInvestmentSummary(
@@ -208,15 +358,29 @@ function buildCreditCardSummary(
   transactions: Transaction[],
   accounts: Account[],
   debtSnapshots: LiabilitySnapshot[],
+  monthStart: string,
+  monthEnd: string,
 ): CreditCardSummary {
   const accountsById = new Map(
     accounts.flatMap((account) => (account.id ? [[account.id, account] as const] : [])),
   );
-  const accountsByName = new Map(accounts.map((account) => [account.name, account]));
+  const accountAliasesByName = new Map(
+    accounts.flatMap((account) => accountAliases(account).map((alias) => [alias, account] as const)),
+  );
   const charged = transactions
-    .filter((tx) => isCreditCardExpense(tx, accountsById, accountsByName))
+    .filter((tx) => isCreditCardExpense(tx, accountsById, accountAliasesByName))
     .reduce((total, tx) => total + tx.amount, 0);
-  const latestDebt = latestByKey(debtSnapshots, (snapshot) => snapshot.account ?? snapshot.name)[0];
+  const creditCardDebts = latestByKey(
+    debtSnapshots.filter((snapshot) => isCreditCardDebtSnapshot(snapshot, accounts)),
+    (snapshot) => snapshot.accountId ?? snapshot.account ?? snapshot.name,
+  );
+  const currentPeriodDebt =
+    creditCardDebts.find(
+      (snapshot) =>
+        snapshot.nextDueDate != null &&
+        snapshot.nextDueDate >= monthStart &&
+        snapshot.nextDueDate < monthEnd,
+    ) ?? creditCardDebts.find((snapshot) => snapshot.date >= monthStart && snapshot.date < monthEnd);
   const subscriptionRows = transactions.filter(
     (tx) =>
       tx.type === 'expense' &&
@@ -225,9 +389,9 @@ function buildCreditCardSummary(
 
   return {
     charged,
-    due: latestDebt?.remainingBalance ?? 0,
-    dueDate: formatMonthDay(latestDebt?.nextDueDate),
-    dueNote: latestDebt ? 'scheduled' : '',
+    due: currentPeriodDebt?.remainingBalance ?? 0,
+    dueDate: formatMonthDay(currentPeriodDebt?.nextDueDate),
+    dueNote: currentPeriodDebt ? '當期' : '',
     subscriptionCount: subscriptionRows.length,
     subscriptionTotal: subscriptionRows.reduce((total, tx) => total + tx.amount, 0),
   };
@@ -245,7 +409,14 @@ export function buildMonthOverview(input: {
   settings?: UserSettings;
 }): MonthOverview {
   const { start, end } = monthDateRange(input.year, input.month);
-  const settings = input.settings ?? DEFAULT_SETTINGS;
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    ...input.settings,
+    dashboardBudgets: {
+      ...DEFAULT_DASHBOARD_BUDGETS,
+      ...(input.settings?.dashboardBudgets ?? {}),
+    },
+  };
   const incomeRows = input.transactions.filter((tx) => tx.type === 'income');
   const expenseRows = input.transactions.filter((tx) => tx.type === 'expense');
   const transferRows = input.transactions.filter((tx) => tx.type === 'transfer');
@@ -254,13 +425,13 @@ export function buildMonthOverview(input: {
   const incomeBySource = [...groupTransactions(incomeRows, (tx) => tx.category || 'Uncategorized').entries()]
     .map(([source, rows]) => ({ source, amount: sum(rows) }))
     .sort((a, b) => b.amount - a.amount);
-  const groupedExpense = groupTransactions(expenseRows, (tx) => categoryGroupFor(tx.category));
+  const groupedExpense = groupTransactions(expenseRows, categoryGroupForTransaction);
   const expenseGroups = [
     { key: 'fixed' as const, label: '固定承諾', amount: sum(groupedExpense.get('fixed') ?? []) },
     { key: 'variable' as const, label: '日常變動', amount: sum(groupedExpense.get('variable') ?? []) },
     { key: 'growth' as const, label: '投資自己', amount: sum(groupedExpense.get('growth') ?? []) },
   ];
-  const budgets = budgetedExpenseCategories().map((category) => ({
+  const budgets = budgetedExpenseCategories(settings.dashboardBudgets).map((category) => ({
     category: category.name,
     spent: expenseRows
       .filter((tx) => tx.category === category.name)
@@ -285,7 +456,12 @@ export function buildMonthOverview(input: {
     note: tx.note,
     tag: tx.tags[0],
     account: accountLabel(tx),
-    amount: tx.type === 'expense' ? -Math.abs(tx.amount) : Math.abs(tx.amount),
+    amount:
+      tx.type === 'transfer'
+        ? Math.abs(tx.amount)
+        : tx.type === 'expense'
+          ? -tx.amount
+          : tx.amount,
     type: tx.type,
     status: tx.status,
   }));
@@ -302,7 +478,7 @@ export function buildMonthOverview(input: {
     incomeBySource,
     expenseGroups,
     budgets,
-    creditCard: buildCreditCardSummary(input.transactions, input.accounts, input.debtSnapshots),
+    creditCard: buildCreditCardSummary(input.transactions, input.accounts, input.debtSnapshots, start, end),
     safeline,
     investment: buildInvestmentSummary(
       input.allTransactions,
@@ -312,10 +488,7 @@ export function buildMonthOverview(input: {
       end,
     ),
     inboxPreview: input.transactions
-      .filter(
-        (tx): tx is Transaction & { type: 'expense' | 'income' } =>
-          tx.status === 'needs_review' && (tx.type === 'expense' || tx.type === 'income'),
-      )
+      .filter((tx) => tx.status === 'needs_review')
       .slice(0, 2)
       .map((tx) => ({
         note: tx.note,
@@ -393,10 +566,13 @@ export function buildAssetOverview(input: {
   today?: string;
 }): AssetOverview {
   const today = input.today ?? new Date().toISOString().slice(0, 10);
+  const reconciledDebtSnapshots = input.debtSnapshots
+    .filter((snapshot) => snapshot.date <= today)
+    .map((snapshot) => reconcileDebtSnapshot(snapshot, input.allTransactions, today));
   const current = buildAccountRows({
     accounts: input.accounts,
     assetSnapshots: input.assetSnapshots.filter((snapshot) => snapshot.date <= today),
-    debtSnapshots: input.debtSnapshots.filter((snapshot) => snapshot.date <= today),
+    debtSnapshots: reconciledDebtSnapshots,
     throughDate: today,
   });
   const latestInvestments = current.latestAssets.filter(
@@ -411,12 +587,17 @@ export function buildAssetOverview(input: {
   const investmentSnapshotDate = formatMonthDay(latestInvestments[0]?.date);
   const liabilities = current.latestDebts.map<LiabilityRow>((snapshot) => ({
     name: snapshot.name,
-    detail: snapshot.nextDueDate ? `due ${formatMonthDay(snapshot.nextDueDate)}` : undefined,
+    detail: [
+      snapshot.monthlyPayment ? `月付 ${snapshot.monthlyPayment.toLocaleString('en-US')}` : undefined,
+      snapshot.nextDueDate ? `下期 ${formatMonthDay(snapshot.nextDueDate)}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(' · ') || undefined,
     remaining: snapshot.remainingBalance,
   }));
   const liabilityTotal = current.latestDebts.reduce((total, snapshot) => total + snapshot.remainingBalance, 0);
   const essentialMonthly = input.allTransactions
-    .filter((tx) => tx.type === 'expense' && categoryGroupFor(tx.category) === 'fixed')
+    .filter((tx) => tx.type === 'expense' && categoryGroupForTransaction(tx) === 'fixed')
     .reduce((total, tx) => total + tx.amount, 0) / 12;
   const safeline = buildSafeline(
     current.cashAndBank,
@@ -433,10 +614,13 @@ export function buildAssetOverview(input: {
     const month = date.getUTCMonth() + 1;
     const label = `${month}`;
     const throughDate = endOfMonth(year, month);
+    const monthDebtSnapshots = input.debtSnapshots
+      .filter((snapshot) => snapshot.date <= throughDate)
+      .map((snapshot) => reconcileDebtSnapshot(snapshot, input.allTransactions, throughDate));
     const rows = buildAccountRows({
       accounts: input.accounts,
       assetSnapshots: input.assetSnapshots.filter((snapshot) => snapshot.date <= throughDate),
-      debtSnapshots: input.debtSnapshots.filter((snapshot) => snapshot.date <= throughDate),
+      debtSnapshots: monthDebtSnapshots,
       throughDate,
     });
     const monthInvestment = rows.latestAssets

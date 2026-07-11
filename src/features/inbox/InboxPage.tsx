@@ -185,9 +185,7 @@ export default function InboxPage() {
   async function toggleTag(tx: Transaction, tag: string) {
     if (!adapter.updateTransaction) return;
     const category = categoryForTag(tx, tag);
-    const tags = tx.tags.includes(tag)
-      ? tx.tags.filter((current) => current !== tag)
-      : [...tx.tags, tag];
+    const tags = tx.tags.includes(tag) ? [] : [tag];
     setSavingId(tx.id);
     setError(null);
     try {

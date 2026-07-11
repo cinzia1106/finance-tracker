@@ -8,12 +8,12 @@ export interface CategoryDefinition {
 }
 
 export const CATEGORY_DEFINITIONS: CategoryDefinition[] = [
-  { name: '生活', kind: 'expense', group: 'variable', budget: 11500 },
-  { name: '交通', kind: 'expense', group: 'variable', budget: 1500 },
-  { name: '娛樂', kind: 'expense', group: 'variable', budget: 3000 },
-  { name: '其他', kind: 'expense', group: 'variable', budget: 1000 },
+  { name: '生活', kind: 'expense', group: 'variable', budget: null },
+  { name: '交通', kind: 'expense', group: 'variable', budget: null },
+  { name: '娛樂', kind: 'expense', group: 'variable', budget: null },
+  { name: '其他', kind: 'expense', group: 'variable', budget: null },
   { name: '健康', kind: 'expense', group: 'growth', budget: null },
-  { name: '工作', kind: 'expense', group: 'growth', budget: null },
+  { name: '工作', kind: 'expense', group: 'variable', budget: null },
   { name: '成長', kind: 'expense', group: 'growth', budget: null },
   { name: '薪資', kind: 'income', group: 'other', budget: null },
   { name: '接案', kind: 'income', group: 'other', budget: null },
@@ -22,6 +22,21 @@ export const CATEGORY_DEFINITIONS: CategoryDefinition[] = [
   { name: '轉帳', kind: 'transfer', group: 'other', budget: null },
   { name: '投資', kind: 'transfer', group: 'other', budget: null },
 ];
+
+export const DEFAULT_DASHBOARD_BUDGETS: Record<string, number> = {
+  生活: 11500,
+  交通: 1500,
+  娛樂: 3000,
+  其他: 1000,
+};
+
+export const FIXED_COMMITMENT_TAGS = ['水電', '電信', '影音訂閱', '軟體訂閱'];
+
+export interface CategoryGroupInput {
+  category: string;
+  tags?: string[];
+  note?: string;
+}
 
 export const TAGS_BY_CATEGORY: Record<string, string[]> = {
   生活: ['飲食', '日用品', '服飾', '水電', '電信'],
@@ -54,10 +69,29 @@ export function categoryGroupFor(category: string): Exclude<CategoryGroup, 'othe
   return definition.group;
 }
 
-export function budgetedExpenseCategories(): Category[] {
+export function categoryGroupForTransaction(input: CategoryGroupInput): Exclude<CategoryGroup, 'other'> {
+  const tags = input.tags ?? [];
+  const tagText = tags.join(' ');
+  const note = input.note ?? '';
+  if (FIXED_COMMITMENT_TAGS.some((tag) => tagText.includes(tag))) return 'fixed';
+  if (input.category === '工作' && tagText.includes('設備') && /分期|電腦|筆電/i.test(note)) {
+    return 'fixed';
+  }
+  if (input.category === '交通' && tagText.includes('機車') && /分期|機車/i.test(note)) {
+    return 'fixed';
+  }
+  return categoryGroupFor(input.category);
+}
+
+export function budgetedExpenseCategories(
+  budgets: Record<string, number> = DEFAULT_DASHBOARD_BUDGETS,
+): Category[] {
   return CATEGORY_DEFINITIONS.filter(
-    (category) => category.kind === 'expense' && category.budget != null,
-  );
+    (category) => category.kind === 'expense' && budgets[category.name] != null,
+  ).map((category) => ({
+    ...category,
+    budget: budgets[category.name],
+  }));
 }
 
 export function tagsForCategory(category: string) {

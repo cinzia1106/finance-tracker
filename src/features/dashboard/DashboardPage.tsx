@@ -1,9 +1,11 @@
 /* 總覽 Dashboard — static UI per the 1a design (mobile + desktop). */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { MonthOverview } from '../../data/adapter';
 import { useAdapter } from '../../data/AdapterContext';
+import { categoryGroupFor } from '../../data/categoryDefinitions';
+import type { Transaction } from '../../types/models';
 import { useAppOutletContext } from '../../layout/AppLayout';
 import { BudgetBar, BudgetRow, ReviewBadge, CountBadge } from '../../components/ui';
 import { formatCurrency, formatPlain, formatSigned } from '../../lib/format';
@@ -18,16 +20,46 @@ export default function DashboardPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [data, setData] = useState<MonthOverview | null>(null);
+  const [monthTransactions, setMonthTransactions] = useState<Transaction[]>([]);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     adapter.getMonthOverview(year, month).then((d) => {
       if (!cancelled) setData(d);
     });
+    adapter
+      .listTransactions?.(year, month)
+      .then((rows) => {
+        if (!cancelled) setMonthTransactions(rows);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
   }, [adapter, year, month, dataVersion]);
+
+  /** Display-only aggregation: expense categories per group, so the
+      three-group card can expand into its own breakdown (the former
+      fixed-costs page folded in here). */
+  const groupBreakdown = useMemo(() => {
+    const byGroup = new Map<string, Map<string, number>>();
+    for (const tx of monthTransactions) {
+      if (tx.type !== 'expense') continue;
+      const group = categoryGroupFor(tx.category);
+      const categories = byGroup.get(group) ?? new Map<string, number>();
+      categories.set(tx.category, (categories.get(tx.category) ?? 0) + tx.amount);
+      byGroup.set(group, categories);
+    }
+    const result = new Map<string, [string, number][]>();
+    for (const [group, categories] of byGroup) {
+      result.set(
+        group,
+        [...categories.entries()].sort((a, b) => b[1] - a[1]),
+      );
+    }
+    return result;
+  }, [monthTransactions]);
 
   function shiftMonth(delta: number) {
     const d = new Date(year, month - 1 + delta, 1);
@@ -107,15 +139,42 @@ export default function DashboardPage() {
               <span className="mobile-only">不含轉帳</span>
             </span>
           </div>
-          {data.expenseGroups.map((g) => (
-            <div key={g.key} className="dashboard__bar-row">
-              <div className="dashboard__bar-label">
-                <span>{g.label}</span>
-                <span className="amount-s">{formatPlain(g.amount)}</span>
+          {data.expenseGroups.map((g) => {
+            const breakdown = groupBreakdown.get(g.key) ?? [];
+            const open = openGroup === g.key;
+            return (
+              <div key={g.key} className="dashboard__bar-row">
+                <button
+                  type="button"
+                  className="dashboard__bar-label dashboard__bar-toggle"
+                  onClick={() => setOpenGroup(open ? null : g.key)}
+                  aria-expanded={open}
+                >
+                  <span>
+                    {g.label}
+                    {breakdown.length > 0 && (
+                      <span className="dashboard__bar-caret">{open ? '▾' : '▸'}</span>
+                    )}
+                  </span>
+                  <span className="amount-s">{formatPlain(g.amount)}</span>
+                </button>
+                <BudgetBar
+                  ratio={data.expense > 0 ? g.amount / data.expense : 0}
+                  tone={GROUP_TONES[g.key]}
+                />
+                {open && breakdown.length > 0 && (
+                  <div className="dashboard__group-detail">
+                    {breakdown.map(([category, amount]) => (
+                      <div key={category} className="dashboard__group-detail-row">
+                        <span className="caption">{category}</span>
+                        <span className="mono caption">{formatPlain(amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <BudgetBar ratio={g.amount / data.expense} tone={GROUP_TONES[g.key]} />
-            </div>
-          ))}
+            );
+          })}
         </section>
 
         {/* 收件匣摘要 — desktop only */}
@@ -128,7 +187,9 @@ export default function DashboardPage() {
             <div key={item.note} className="dashboard__inbox-row">
               <span className="caption">{item.note}</span>
               <span className="mono">
-                {formatSigned(item.type === 'expense' ? -item.amount : item.amount)}
+                {item.type === 'transfer'
+                  ? formatPlain(item.amount)
+                  : formatSigned(item.type === 'expense' ? -item.amount : item.amount)}
               </span>
             </div>
           ))}
@@ -145,14 +206,14 @@ export default function DashboardPage() {
           ))}
         </section>
 
-        {/* 國泰信用卡 */}
+        {/* 信用卡 */}
         <section className="card span-6">
           <div className="card__header">
-            <h2 className="h2">國泰信用卡</h2>
-            <Link to="/recurring" className="caption dashboard__card-link">
+            <h2 className="h2">信用卡</h2>
+            <span className="micro dashboard__group-note">
               20日訂閱 {data.creditCard.subscriptionCount} 筆
-              <span className="desktop-only"> · {formatPlain(data.creditCard.subscriptionTotal)}</span> →
-            </Link>
+              <span className="desktop-only"> · {formatPlain(data.creditCard.subscriptionTotal)}</span>
+            </span>
           </div>
           <div className="dashboard__cc-figures">
             <div>
@@ -178,7 +239,6 @@ export default function DashboardPage() {
           <div className="micro dashboard__mgmt-label">管理</div>
           {[
             { to: '/inbox', label: '待確認', withBadge: true },
-            { to: '/recurring', label: '固定支出' },
             { to: '/investments', label: '投資' },
             { to: '/monthly-review', label: '月報' },
             { to: '/settings', label: '設定' },
