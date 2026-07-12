@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAdapter } from '../../data/AdapterContext';
 import { EmptyState } from '../../components/ui';
-import { formatPlain, formatSigned } from '../../lib/format';
+import { formatCurrency, formatPlain, formatSigned } from '../../lib/format';
 import type { Account, AssetSnapshot, Transaction } from '../../types/models';
 import type { InvestmentSummary } from '../../data/adapter';
 import { buildInvestmentDetail, type InvestmentDetail } from './investmentDetail';
@@ -131,6 +131,9 @@ export default function InvestmentsPage() {
           <span className="caption invest-subtitle desktop-only">
             市值為手動快照，不做即時行情 · 買賣以 transfer 記錄，不列入生活收支
           </span>
+          <span className="caption invest-subtitle mobile-only">
+            市值為手動快照 · 不做即時行情
+          </span>
         </div>
         <Link to="/assets" className="btn btn--secondary desktop-only">
           更新市值快照
@@ -160,18 +163,18 @@ export default function InvestmentsPage() {
           </EmptyState>
         ) : (
           <>
-            {/* Row 1 — four stat cards */}
-            <section className="card span-3">
+            {/* Row 1 — four stat cards (desktop) */}
+            <section className="card span-3 desktop-only">
               <div className="stat__label">累計淨投入</div>
               <div className="stat__value invest-stat">{formatPlain(detail.summary.netInvested)}</div>
               <div className="caption">買入 − 賣出 transfer 合計</div>
             </section>
-            <section className="card span-3">
+            <section className="card span-3 desktop-only">
               <div className="stat__label">估計市值</div>
               <div className="stat__value invest-stat">{formatPlain(detail.summary.marketValue)}</div>
               <div className="caption">快照 {detail.summary.snapshotDate}</div>
             </section>
-            <section className="card span-3">
+            <section className="card span-3 desktop-only">
               <div className="stat__label">未實現損益</div>
               <div
                 className={`stat__value invest-stat ${
@@ -185,14 +188,58 @@ export default function InvestmentsPage() {
                 {detail.summary.unrealizedGainPct}% · 相對淨投入
               </div>
             </section>
-            <section className="card span-3">
+            <section className="card span-3 desktop-only">
               <div className="stat__label">累計股息</div>
               <div className="stat__value invest-stat">{formatPlain(detail.dividendTotal)}</div>
               <div className="caption">列為被動收入</div>
             </section>
 
-            {/* Row 2 — chart + monthly activity */}
-            <section className="card span-7">
+            {/* Hero card (mobile) — net invested big + 2x2 secondary */}
+            <section className="card mobile-only invest-hero">
+              <div className="card__header">
+                <div className="micro">累計淨投入</div>
+                <span className="micro invest-note">快照 {detail.summary.snapshotDate}</span>
+              </div>
+              <div className="amount-xl">{formatCurrency(detail.summary.netInvested)}</div>
+              <div className="invest-hero__grid">
+                <div>
+                  <div className="micro invest-note">估計市值</div>
+                  <div className="invest-hero__num">{formatPlain(detail.summary.marketValue)}</div>
+                </div>
+                <div>
+                  <div className="micro invest-note">未實現損益</div>
+                  <div
+                    className={`invest-hero__num ${
+                      detail.summary.unrealizedGain < 0 ? 'liability' : 'income'
+                    }`}
+                  >
+                    {formatSigned(detail.summary.unrealizedGain)}
+                  </div>
+                </div>
+                <div>
+                  <div className="micro invest-note">本月買入</div>
+                  <div className="invest-hero__num">{formatPlain(detail.summary.monthlyBuy)}</div>
+                </div>
+                <div>
+                  <div className="micro invest-note">累計股息</div>
+                  <div className="invest-hero__num">{formatPlain(detail.dividendTotal)}</div>
+                </div>
+              </div>
+            </section>
+
+            {/* Stale warning banner (mobile) */}
+            {detail.holdings.some((h) => h.stale) && (
+              <div className="card mobile-only invest-warning">
+                <span className="badge__dot invest-warning__dot" />
+                <span className="caption">
+                  部分標的市值快照已過期，總市值可能失真。
+                  <strong>請於電腦版更新快照。</strong>
+                </span>
+              </div>
+            )}
+
+            {/* Row 2 — chart + monthly activity (desktop) */}
+            <section className="card span-7 desktop-only">
               <div className="card__header">
                 <h2 className="h2">淨投入 vs 市值</h2>
                 <span className="invest-legend">
@@ -207,7 +254,7 @@ export default function InvestmentsPage() {
               <InvestChart detail={detail} />
             </section>
 
-            <section className="card span-5">
+            <section className="card span-5 desktop-only">
               <div className="card__header">
                 <h2 className="h2">本月動態</h2>
                 <span className="micro invest-note">{detail.monthLabel}</span>
@@ -262,35 +309,64 @@ export default function InvestmentsPage() {
                   尚無投資帳戶快照。到「資產」頁更新證券帳戶市值後顯示。
                 </span>
               ) : (
-                <div>
-                  <div className="data-table__head invest-holdings-grid">
-                    <span>標的</span>
-                    <span className="cell-right">股數</span>
-                    <span className="cell-right">投入成本</span>
-                    <span className="cell-right">市值快照</span>
-                    <span className="cell-right">快照日</span>
-                  </div>
-                  {detail.holdings.map((h) => (
-                    <div
-                      key={h.name}
-                      className={`data-table__row invest-holdings-grid${h.stale ? ' data-table__row--review' : ''}`}
-                    >
-                      <span>
-                        {h.name}
-                        {h.stale && <span className="badge badge--review invest-stale-badge">快照待補</span>}
-                      </span>
-                      <span className="mono cell-right">
-                        {h.shares === null ? '—' : formatPlain(h.shares)}
-                      </span>
-                      <span className="mono cell-right">{formatPlain(h.cost)}</span>
-                      <span className="mono cell-right">{formatPlain(h.marketValue)}</span>
-                      <span className="mono caption cell-right">{h.snapshotDate}</span>
+                <>
+                  {/* Desktop table */}
+                  <div className="desktop-only">
+                    <div className="data-table__head invest-holdings-grid">
+                      <span>標的</span>
+                      <span className="cell-right">股數</span>
+                      <span className="cell-right">投入成本</span>
+                      <span className="cell-right">市值快照</span>
+                      <span className="cell-right">快照日</span>
                     </div>
-                  ))}
-                </div>
+                    {detail.holdings.map((h) => (
+                      <div
+                        key={h.name}
+                        className={`data-table__row invest-holdings-grid${h.stale ? ' data-table__row--review' : ''}`}
+                      >
+                        <span>
+                          {h.name}
+                          {h.stale && <span className="badge badge--review invest-stale-badge">快照待補</span>}
+                        </span>
+                        <span className="mono cell-right">
+                          {h.shares === null ? '—' : formatPlain(h.shares)}
+                        </span>
+                        <span className="mono cell-right">{formatPlain(h.cost)}</span>
+                        <span className="mono cell-right">{formatPlain(h.marketValue)}</span>
+                        <span className="mono caption cell-right">{h.snapshotDate}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Mobile card list */}
+                  <div className="mobile-only invest-holding-cards">
+                    {detail.holdings.map((h) => (
+                      <div
+                        key={h.name}
+                        className={`invest-holding-card${h.stale ? ' invest-holding-card--stale' : ''}`}
+                      >
+                        <span className="invest-holding-card__main">
+                          <span className="invest-holding-card__name">
+                            {h.name}
+                            {h.stale && (
+                              <span className="badge badge--review invest-stale-badge">待補</span>
+                            )}
+                          </span>
+                          <span className="micro invest-note">
+                            {h.shares !== null ? `${formatPlain(h.shares)} 股 · ` : ''}
+                            成本 {formatPlain(h.cost)}
+                          </span>
+                        </span>
+                        <span className="invest-holding-card__right">
+                          <span className="amount-s">{formatPlain(h.marketValue)}</span>{' '}
+                          <span className="micro invest-note">{h.snapshotDate}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
               {detail.holdings.some((h) => h.stale) && (
-                <div className="micro invest-note invest-holdings-note">
+                <div className="micro invest-note invest-holdings-note desktop-only">
                   部分標的已超過 30 天未更新，總市值可能失真；更新後將重算未實現損益。
                 </div>
               )}

@@ -52,6 +52,79 @@
   padding-top: 8px;
 }
 
+/* Mobile hero card */
+.invest-hero__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  border-top: var(--border-hairline-soft);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+.invest-hero__num {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Mobile stale warning banner */
+.invest-warning {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--color-apricot-tint);
+  border-color: var(--color-apricot-border);
+  padding: 12px 16px;
+}
+.invest-warning .caption {
+  color: var(--color-apricot-deep);
+  line-height: 1.6;
+}
+.invest-warning__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-dot-orange);
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+/* Mobile holdings card list */
+.invest-holding-cards {
+  display: flex;
+  flex-direction: column;
+}
+.invest-holding-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: var(--border-hairline-soft);
+}
+.invest-holding-card:last-child {
+  border-bottom: none;
+}
+.invest-holding-card--stale {
+  background: var(--color-apricot-row);
+  margin: 0 -16px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.invest-holding-card__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.invest-holding-card__name {
+  font-size: 13px;
+}
+.invest-holding-card__right {
+  text-align: right;
+  white-space: nowrap;
+}
+
 /* Dividend timeline */
 .invest-timeline {
   display: flex;
@@ -94,12 +167,11 @@
 }
 
 @media (max-width: 959px) {
-  /* Drop 股數 and 快照日 on narrow screens: 標的 / 投入成本 / 市值快照 */
-  .invest-holdings-grid {
-    grid-template-columns: minmax(0, 1fr) 90px 90px;
+  /* Timeline drops the dot column on mobile (matches the compact list) */
+  .invest-timeline__row {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
-  .invest-holdings-grid > span:nth-child(2),
-  .invest-holdings-grid > span:nth-child(5) {
+  .invest-timeline__dot {
     display: none;
   }
 }
