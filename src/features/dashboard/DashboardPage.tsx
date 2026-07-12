@@ -385,6 +385,47 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        {/* 投資 — 快照摘要，完整內容在投資頁 */}
+        <section className="card span-4">
+          <div className="card__header">
+            <h2 className="h2">投資</h2>
+            <span className="micro dashboard__group-note">
+              市值快照 {data.investment.snapshotDate}
+            </span>
+          </div>
+          <div className="dashboard__invest-grid">
+            <div>
+              <div className="micro dashboard__cc-label">累計淨投入</div>
+              <div className="amount-l dashboard__invest-num">
+                {formatPlain(data.investment.netInvested)}
+              </div>
+            </div>
+            <div>
+              <div className="micro dashboard__cc-label">估計市值</div>
+              <div className="amount-l dashboard__invest-num">
+                {formatPlain(data.investment.marketValue)}
+              </div>
+            </div>
+            <div>
+              <div className="micro dashboard__cc-label">未實現損益</div>
+              <div
+                className={`amount-s ${
+                  data.investment.unrealizedGain < 0 ? 'liability' : 'income'
+                }`}
+              >
+                {formatSigned(data.investment.unrealizedGain)}
+                {data.investment.marketValue > 0
+                  ? ` (${data.investment.unrealizedGainPct >= 0 ? '+' : ''}${data.investment.unrealizedGainPct}%)`
+                  : ''}
+              </div>
+            </div>
+            <div>
+              <div className="micro dashboard__cc-label">本月買入</div>
+              <div className="amount-s">{formatPlain(data.investment.monthlyBuy)}</div>
+            </div>
+          </div>
+        </section>
+
         {/* 管理入口 — mobile only */}
         <section className="card row-list mobile-only">
           <div className="micro dashboard__mgmt-label">管理</div>
@@ -406,7 +447,7 @@ export default function DashboardPage() {
         </section>
 
         {/* 最近交易 — desktop only */}
-        <section className="card span-12 desktop-only">
+        <section className="card span-8 desktop-only">
           <div className="card__header">
             <h2 className="h2">最近交易</h2>
             <Link to="/transactions" className="caption dashboard__card-link">
