@@ -10,6 +10,7 @@ import {
   CYCLE_OPTIONS,
   FIXED_CATEGORY_OPTIONS,
   type FixedItemForm,
+  autoNextDue,
   cycleLabel,
   cycleRank,
   emptyFixedItemForm,
@@ -23,6 +24,7 @@ import {
   noteWithRecurringMeta,
   recurringCurrency,
   recurringPaymentDates,
+  recurringPlainNote,
   recurringPlanChanges,
   recurringTags,
 } from './recurringShared';
@@ -44,7 +46,8 @@ export default function FixedCostsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState<FixedItemForm>(emptyFixedItemForm);
   const [editForm, setEditForm] = useState<FixedItemForm>(emptyFixedItemForm);
-  const [paymentDates, setPaymentDates] = useState<Record<string, string>>({});
+  const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [newPayDate, setNewPayDate] = useState(today());
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -98,15 +101,17 @@ export default function FixedCostsPage() {
     setBusyId('new');
     setError(null);
     try {
+      const validBillingDay =
+        billingDay && billingDay >= 1 && billingDay <= 31 ? billingDay : null;
       const created = await adapter.createRecurringItem({
         name: addForm.name.trim(),
         amount,
         cycle: addForm.cycle,
         monthlyEquiv: monthlyEquivalent(amount, addForm.cycle),
         category: addForm.category,
-        billingDay: billingDay && billingDay >= 1 && billingDay <= 31 ? billingDay : null,
+        billingDay: validBillingDay,
         active: true,
-        nextDue: addForm.nextDue || undefined,
+        nextDue: autoNextDue(addForm.cycle, validBillingDay, null),
         note: noteWithRecurringMeta(addForm.note, addForm.tag, addForm.currency),
       });
       setRecurring((previous) => [...previous, created]);
@@ -144,15 +149,17 @@ export default function FixedCostsPage() {
     setBusyId(item.id);
     setError(null);
     try {
+      const validBillingDay =
+        billingDay && billingDay >= 1 && billingDay <= 31 ? billingDay : null;
       const updated = await adapter.updateRecurringItem(item.id, {
         name: editForm.name.trim(),
         amount,
         cycle: editForm.cycle,
         monthlyEquiv: monthlyEquivalent(amount, editForm.cycle),
         category: editForm.category,
-        billingDay: billingDay && billingDay >= 1 && billingDay <= 31 ? billingDay : null,
+        billingDay: validBillingDay,
         active: true,
-        nextDue: editForm.nextDue || undefined,
+        nextDue: autoNextDue(editForm.cycle, validBillingDay, item.lastPaid ?? null),
         note: noteWithRecurringMeta(
           editForm.note,
           editForm.tag,
@@ -177,10 +184,39 @@ export default function FixedCostsPage() {
     try {
       const updated = await adapter.updateRecurringItem(item.id, {
         lastPaid: paidDate,
+        nextDue: autoNextDue(item.cycle, item.billingDay, paidDate, paidDate),
         note: noteWithAddedPayment(item, paidDate),
       });
       setRecurring((previous) => previous.map((row) => (row.id === item.id ? updated : row)));
-      setPaymentDates((previous) => ({ ...previous, [item.id ?? '']: paidDate }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '繳費紀錄更新失敗。');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /** 覆寫整份繳費紀錄（編輯／刪除單筆時使用），lastPaid 跟著最新一筆。 */
+  async function savePayments(item: RecurringExpense, payments: string[]) {
+    if (!adapter.updateRecurringItem || !item.id) return;
+    const cleaned = [...new Set(payments.filter(Boolean))].sort((a, b) => b.localeCompare(a));
+    const latest = cleaned[0] ?? null;
+    setBusyId(item.id);
+    setError(null);
+    try {
+      const updated = await adapter.updateRecurringItem(item.id, {
+        lastPaid: latest,
+        nextDue: latest
+          ? autoNextDue(item.cycle, item.billingDay, latest, latest)
+          : autoNextDue(item.cycle, item.billingDay, null),
+        note: noteWithRecurringMeta(
+          recurringPlainNote(item),
+          recurringTags(item)[0] ?? '',
+          recurringCurrency(item),
+          cleaned,
+          recurringPlanChanges(item),
+        ),
+      });
+      setRecurring((previous) => previous.map((row) => (row.id === item.id ? updated : row)));
     } catch (err) {
       setError(err instanceof Error ? err.message : '繳費紀錄更新失敗。');
     } finally {
@@ -317,15 +353,6 @@ export default function FixedCostsPage() {
             onChange={(event) => setForm({ ...form, billingDay: event.target.value })}
           />
         </label>
-        <label className="form-field">
-          <span className="micro">下次扣款</span>
-          <input
-            className="text-input"
-            type="date"
-            value={form.nextDue}
-            onChange={(event) => setForm({ ...form, nextDue: event.target.value })}
-          />
-        </label>
         <label className="form-field form-field--wide">
           <span className="micro">備註</span>
           <input
@@ -357,13 +384,13 @@ export default function FixedCostsPage() {
     <>
       <header className="page-header">
         <div className="page-header__lead">
-          <Link to="/" className="back-header__btn mobile-only" aria-label="回總覽">
-            ←
+          <Link to="/" className="back-header__btn mobile-only" aria-label="返回總覽">
+            ‹
           </Link>
           <h1 className="h1">固定支出</h1>
           {rows.length > 0 && (
             <span className="caption">
-              已支出 {paidCount}/{rows.length} · TWD 月均 {formatPlain(monthlyTotal)}
+              本月已繳 {paidCount}/{rows.length} · 月承諾 {formatPlain(monthlyTotal)}
             </span>
           )}
         </div>
@@ -397,9 +424,9 @@ export default function FixedCostsPage() {
             <div className="dashboard__fixed-list">
               {rows.map(({ item, paid }) => {
                 const itemId = item.id ?? item.name;
-                const paymentDate = paymentDates[itemId] ?? today();
-                const paymentHistory = recurringPaymentDates(item).slice(0, 3);
-                const planHistory = recurringPlanChanges(item).slice(0, 2);
+                const payments = recurringPaymentDates(item);
+                const planHistory = recurringPlanChanges(item);
+                const historyOpen = historyOpenId === itemId;
                 return (
                   <div key={itemId} className="dashboard__fixed-row">
                     <span className="dashboard__fixed-name cell-ellipsis" title={item.name}>
@@ -410,8 +437,6 @@ export default function FixedCostsPage() {
                         {recurringTags(item)[0] ? ` · ${recurringTags(item)[0]}` : ''}
                         {` · ${cycleLabel(item.cycle)}`}
                         {fixedDueText(item) ? ` · ${fixedDueText(item)}` : ''}
-                        {paymentHistory.length > 0 ? ` · 繳費 ${paymentHistory.join('、')}` : ''}
-                        {planHistory.length > 0 ? ` · 方案 ${planHistory.join('、')}` : ''}
                       </span>
                     </span>
                     <span className="amount-s dashboard__fixed-amount">
@@ -423,6 +448,7 @@ export default function FixedCostsPage() {
                         type="button"
                         className="badge badge--confirmed dashboard__fixed-badge"
                         disabled={busyId === item.id}
+                        title="點擊改為待繳"
                         onClick={() => void clearCurrentPaid(item)}
                       >
                         <span className="badge__dot" />
@@ -433,7 +459,8 @@ export default function FixedCostsPage() {
                         type="button"
                         className="badge badge--review dashboard__fixed-badge"
                         disabled={busyId === item.id}
-                        onClick={() => void recordPayment(item, paymentDate)}
+                        title="點擊以今天記錄繳費"
+                        onClick={() => void recordPayment(item, today())}
                       >
                         <span className="badge__dot" />
                         待繳
@@ -459,25 +486,16 @@ export default function FixedCostsPage() {
                       </span>
                     ) : (
                       <span className="dashboard__fixed-actions">
-                        <input
-                          className="text-input mono dashboard__fixed-paid-date"
-                          type="date"
-                          value={paymentDate}
-                          onChange={(event) =>
-                            setPaymentDates((previous) => ({
-                              ...previous,
-                              [itemId]: event.target.value,
-                            }))
-                          }
-                          title="繳費日期"
-                        />
                         <button
                           type="button"
                           className="btn btn--secondary btn--sm"
-                          disabled={busyId === item.id}
-                          onClick={() => void recordPayment(item, paymentDate)}
+                          onClick={() => {
+                            setHistoryOpenId(historyOpen ? null : itemId);
+                            setNewPayDate(today());
+                          }}
+                          aria-expanded={historyOpen}
                         >
-                          記錄繳費
+                          紀錄{payments.length > 0 ? ` ${payments.length}` : ''}
                         </button>
                         <button
                           type="button"
@@ -493,10 +511,78 @@ export default function FixedCostsPage() {
                           title="刪除"
                           onClick={() => setDeleteConfirmId(item.id ?? null)}
                         >
-                          ×
+                          ✕
                         </button>
                       </span>
                     )}
+
+                    {/* 繳費紀錄 — 點「紀錄」展開，可新增／修改／刪除單筆 */}
+                    {historyOpen && (
+                      <div className="fc-history">
+                        <div className="fc-history__head">
+                          <span className="micro">繳費紀錄</span>
+                          <span className="fc-history__add">
+                            <input
+                              className="text-input mono fc-history__date"
+                              type="date"
+                              value={newPayDate}
+                              onChange={(event) => setNewPayDate(event.target.value)}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn--primary btn--sm"
+                              disabled={busyId === item.id || !newPayDate}
+                              onClick={() => void recordPayment(item, newPayDate)}
+                            >
+                              新增紀錄
+                            </button>
+                          </span>
+                        </div>
+                        {payments.length === 0 ? (
+                          <span className="caption">尚無繳費紀錄。</span>
+                        ) : (
+                          payments.map((date, index) => (
+                            <div key={`${date}-${index}`} className="fc-history__row">
+                              <input
+                                className="text-input mono fc-history__date"
+                                type="date"
+                                value={date}
+                                disabled={busyId === item.id}
+                                onChange={(event) => {
+                                  const next = [...payments];
+                                  next[index] = event.target.value;
+                                  void savePayments(item, next);
+                                }}
+                              />
+                              {index === 0 && (
+                                <span className="micro fc-history__latest">最新</span>
+                              )}
+                              <button
+                                type="button"
+                                className="dashboard__fixed-delete"
+                                aria-label={`刪除繳費紀錄 ${date}`}
+                                title="刪除此筆紀錄"
+                                disabled={busyId === item.id}
+                                onClick={() =>
+                                  void savePayments(
+                                    item,
+                                    payments.filter((_, i) => i !== index),
+                                  )
+                                }
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))
+                        )}
+                        {planHistory.length > 0 && (
+                          <div className="fc-history__plans caption">
+                            方案調整：{planHistory.join('、')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {editId === item.id && (
                       <form
                         onSubmit={(event) => void updateItem(event, item)}
@@ -516,8 +602,8 @@ export default function FixedCostsPage() {
 
         <section className="card span-12">
           <div className="caption" style={{ lineHeight: 1.7 }}>
-            提醒：固定支出的繳費日期與方案變更紀錄會保存在項目備註的內部標記中；不會新增資料表。
-            若方案金額或週期改變，按「編輯」儲存後會留下方案變更紀錄。
+            規則：下次扣款日自動推算——月繳依扣款日、年繳／半年繳依最後繳費日加一個週期，
+            不需手動輸入。點「紀錄」可查看與修改每筆繳費日期；方案金額或週期改變時會自動留下調整紀錄。
           </div>
         </section>
       </div>

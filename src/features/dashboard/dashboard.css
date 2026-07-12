@@ -187,6 +187,49 @@
 .dashboard__fixed-empty {
   line-height: 1.6;
 }
+
+/* 固定支出頁 — 繳費紀錄展開面板 */
+.fc-history {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin: 4px 0 8px 0;
+  background: var(--color-panel);
+  border-radius: var(--radius-badge);
+}
+.fc-history__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.fc-history__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.fc-history__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fc-history__date {
+  max-width: 160px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.fc-history__latest {
+  color: var(--color-mint-deep);
+  letter-spacing: 0;
+}
+.fc-history__plans {
+  border-top: var(--border-hairline-soft);
+  padding-top: 8px;
+  line-height: 1.6;
+}
 .dashboard__fixed-allpaid {
   color: var(--color-mint-deep);
   font-weight: 500;

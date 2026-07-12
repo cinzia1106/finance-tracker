@@ -75,11 +75,31 @@ function formatMonthDay(date: string) {
   return `${Number(match[1])}/${Number(match[2])}`;
 }
 
-function addMonths(date: string, months: number) {
+export function addMonths(date: string, months: number) {
   const parsed = new Date(`${date}T00:00:00Z`);
   if (Number.isNaN(parsed.getTime())) return '';
   parsed.setUTCMonth(parsed.getUTCMonth() + months);
   return parsed.toISOString().slice(0, 10);
+}
+
+/** Auto-derived next due date — the form never asks for it.
+    monthly: next occurrence of billingDay; yearly/semiannual: last paid
+    plus one cycle; otherwise unknown. */
+export function autoNextDue(
+  cycle: RecurringCycle,
+  billingDay: number | null | undefined,
+  lastPaid: string | null | undefined,
+  from: string = new Date().toISOString().slice(0, 10),
+) {
+  if (cycle === 'monthly' && billingDay) {
+    const [y, m] = from.split('-').map(Number);
+    const thisMonth = `${y}-${String(m).padStart(2, '0')}-${String(billingDay).padStart(2, '0')}`;
+    if (thisMonth >= from) return thisMonth;
+    return addMonths(thisMonth, 1);
+  }
+  if (cycle === 'yearly' && lastPaid) return addMonths(lastPaid, 12);
+  if (cycle === 'semiannual' && lastPaid) return addMonths(lastPaid, 6);
+  return undefined;
 }
 
 export function fixedDueText(item: RecurringExpense) {
