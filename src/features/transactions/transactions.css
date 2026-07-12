@@ -18,8 +18,8 @@
 /* Account column is FIXED width: every row is its own grid, so an auto
    track would resolve per-row and shift the other columns out of line. */
 .tx-grid {
-  grid-template-columns: 32px 48px 40px 72px minmax(150px, 1fr) minmax(140px, 0.6fr) 200px 96px 52px 28px;
-  min-width: 1000px;
+  grid-template-columns: 48px 40px 72px minmax(150px, 1fr) minmax(140px, 0.6fr) 200px 96px 52px 28px;
+  min-width: 960px;
 }
 .tx-grid.data-table__row {
   padding: 7px 0;
@@ -27,20 +27,6 @@
 /* Stronger separator where a new day group begins */
 .tx-row--day-start {
   border-top: var(--border-hairline);
-}
-.tx-row--selected {
-  background: var(--color-mint-tint);
-}
-.tx-check {
-  display: inline-flex;
-  align-items: center;
-}
-.tx-check input {
-  accent-color: var(--color-mint-deep);
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  cursor: pointer;
 }
 .tx-day-list {
   display: flex;
@@ -173,29 +159,6 @@
 }
 .tx-totals-muted {
   color: var(--color-ink-40);
-}
-
-/* Batch toolbar */
-.tx-batchbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 8px 12px;
-  border-radius: var(--radius-control);
-  background: var(--color-mint-tint);
-  border: 1px solid var(--color-mint-border);
-}
-.tx-batchbar__count {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-mint-deeper);
-}
-.tx-batchbar__select {
-  max-width: 130px;
-}
-.tx-batchbar__cancel {
-  margin-left: auto;
 }
 
 /* Pagination footer */
@@ -362,8 +325,8 @@
     display: none;
   }
   .tx-grid {
-    grid-template-columns: 32px 48px 40px 72px minmax(150px, 1fr) 200px 96px 52px 28px;
-    min-width: 840px;
+    grid-template-columns: 48px 40px 72px minmax(150px, 1fr) 200px 96px 52px 28px;
+    min-width: 800px;
   }
 }
 

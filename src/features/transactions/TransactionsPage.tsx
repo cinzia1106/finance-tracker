@@ -93,8 +93,6 @@ export default function TransactionsPage() {
   const [transferEditId, setTransferEditId] = useState<string | null>(null);
   const [transferDraft, setTransferDraft] = useState({ from: '', to: '' });
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [batchBusy, setBatchBusy] = useState(false);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -180,11 +178,21 @@ export default function TransactionsPage() {
     return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
   }, [transactions]);
 
+  /** Tag options: only the selected category's tags once a category is
+      chosen; otherwise every tag present this month. */
   const presentTags = useMemo(() => {
+    if (categoryFilter) {
+      const defined = new Set(tagsForCategory(categoryFilter));
+      const used = new Set<string>();
+      for (const tx of transactions ?? []) {
+        if (tx.category === categoryFilter) tx.tags.forEach((t) => used.add(t));
+      }
+      return [...new Set([...defined, ...used])].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    }
     const names = new Set<string>();
     for (const tx of transactions ?? []) for (const t of tx.tags) names.add(t);
     return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
-  }, [transactions]);
+  }, [transactions, categoryFilter]);
 
   // Reset to page 1 whenever the filtered set changes shape
   useEffect(() => {
@@ -217,9 +225,6 @@ export default function TransactionsPage() {
     return [...groups.entries()];
   }, [paged]);
 
-  const pageRowIds = useMemo(() => paged.map((tx) => tx.id), [paged]);
-  const allSelected = pageRowIds.length > 0 && pageRowIds.every((id) => selected.has(id));
-
   const automationSummary = useMemo(
     () => summarizeAutomation(transactions ?? []),
     [transactions],
@@ -237,75 +242,6 @@ export default function TransactionsPage() {
     );
   }
 
-  function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleSelectAll() {
-    setSelected((prev) => {
-      if (pageRowIds.every((id) => prev.has(id))) {
-        const next = new Set(prev);
-        pageRowIds.forEach((id) => next.delete(id));
-        return next;
-      }
-      return new Set([...prev, ...pageRowIds]);
-    });
-  }
-
-  /** Apply a patch to every selected row through the existing update path;
-      `derive` can skip a row (return null) or tailor the patch per row. */
-  async function batchApply(
-    derive: (tx: Transaction) => Partial<Transaction> | null,
-    errorMessage: string,
-  ) {
-    if (!adapter.updateTransaction || selected.size === 0) return;
-    const targets = (transactions ?? []).filter((tx) => selected.has(tx.id));
-    setBatchBusy(true);
-    setEditError(null);
-    const done: string[] = [];
-    try {
-      for (const tx of targets) {
-        const patch = derive(tx);
-        if (!patch) {
-          done.push(tx.id);
-          continue;
-        }
-        await adapter.updateTransaction(tx.id, patch);
-        patchLocal(tx.id, patch);
-        done.push(tx.id);
-      }
-    } catch (err) {
-      setEditError(err instanceof Error ? err.message : errorMessage);
-    } finally {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        done.forEach((id) => next.delete(id));
-        return next;
-      });
-      setBatchBusy(false);
-    }
-  }
-
-  const batchConfirm = () =>
-    void batchApply(
-      (tx) => (tx.status === 'needs_review' ? { status: 'confirmed' } : null),
-      '批次確認失敗，請稍後再試。',
-    );
-  const batchCategory = (category: string) =>
-    void batchApply(
-      (tx) => (tx.type === 'transfer' || tx.category === category ? null : { category }),
-      '批次改分類失敗，請稍後再試。',
-    );
-  const batchAddTag = (tag: string) =>
-    void batchApply(
-      (tx) => (tx.tags.includes(tag) ? null : { tags: [...tx.tags, tag] }),
-      '批次加標籤失敗，請稍後再試。',
-    );
 
   async function changeCategory(tx: Transaction, category: string) {
     if (!adapter.updateTransaction || category === tx.category) return;
@@ -548,7 +484,10 @@ export default function TransactionsPage() {
         <select
           className={`text-input tx-filter${categoryFilter ? ' tx-filter--active' : ''}`}
           value={categoryFilter}
-          onChange={(event) => setCategoryFilter(event.target.value)}
+          onChange={(event) => {
+            setCategoryFilter(event.target.value);
+            setTagFilter('');
+          }}
           aria-label="依分類篩選"
         >
           <option value="">分類：全部</option>
@@ -587,63 +526,6 @@ export default function TransactionsPage() {
 
       {editError && <div className="tx-edit-error caption">{editError}</div>}
 
-      {/* Batch toolbar — appears when rows are selected */}
-      {selected.size > 0 && (
-        <div className="tx-batchbar">
-          <span className="tx-batchbar__count">已選 {selected.size} 筆</span>
-          <select
-            className="text-input tx-batchbar__select"
-            value=""
-            disabled={batchBusy}
-            onChange={(event) => {
-              if (event.target.value) batchCategory(event.target.value);
-              event.target.value = '';
-            }}
-            aria-label="批次改分類"
-          >
-            <option value="">改分類…</option>
-            {CATEGORY_DEFINITIONS.filter((c) => c.kind === 'expense').map((c) => (
-              <option key={c.name} value={c.name}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <select
-            className="text-input tx-batchbar__select"
-            value=""
-            disabled={batchBusy}
-            onChange={(event) => {
-              if (event.target.value) batchAddTag(event.target.value);
-              event.target.value = '';
-            }}
-            aria-label="批次加標籤"
-          >
-            <option value="">加標籤…</option>
-            {presentTags.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
-            disabled={batchBusy}
-            onClick={batchConfirm}
-          >
-            標記已確認
-          </button>
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm tx-batchbar__cancel"
-            disabled={batchBusy}
-            onClick={() => setSelected(new Set())}
-          >
-            取消選取
-          </button>
-        </div>
-      )}
-
       <div className="grid-12">
         {transactions === null ? (
           <section className="card span-12">
@@ -663,14 +545,6 @@ export default function TransactionsPage() {
             <section className="card span-12 desktop-only">
               <div className="tx-table">
               <div className="data-table__head tx-grid">
-                <span className="tx-check">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleSelectAll}
-                    aria-label="全選本頁"
-                  />
-                </span>
                 <span>日期</span>
                 <span>類型</span>
                 <span>分類</span>
@@ -688,17 +562,9 @@ export default function TransactionsPage() {
                 <div key={tx.id} style={{ display: 'contents' }}>
                 <div
                   className={`data-table__row tx-grid${rowStateClass(tx)}${
-                    selected.has(tx.id) ? ' tx-row--selected' : ''
-                  }${dayStart && index > 0 ? ' tx-row--day-start' : ''}`}
+                    dayStart && index > 0 ? ' tx-row--day-start' : ''
+                  }`}
                 >
-                  <span className="tx-check">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(tx.id)}
-                      onChange={() => toggleSelect(tx.id)}
-                      aria-label="選取這筆"
-                    />
-                  </span>
                   <span className="mono caption">{dayStart ? tx.date.slice(5) : ''}</span>
                   <span>
                     <select
