@@ -38,6 +38,60 @@
   letter-spacing: 0;
 }
 
+/* 分類支出 / 分類收入 — spent bars with a budget cutoff tick */
+.dashboard__spend-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dashboard__spend-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.dashboard__spend-num {
+  color: var(--color-ink-70);
+  white-space: nowrap;
+}
+.dashboard__spend-budget {
+  color: var(--color-ink-40);
+}
+.dashboard__spend-nobudget {
+  color: var(--color-ink-40);
+  letter-spacing: 0;
+  font-family: var(--font-ui);
+}
+.dashboard__spend-warn {
+  color: var(--color-apricot-deep);
+  letter-spacing: 0;
+}
+.dashboard__spend-track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-bar-track);
+}
+.dashboard__spend-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-mocha);
+}
+.dashboard__spend-fill--over {
+  background: var(--color-apricot-strong);
+}
+.dashboard__spend-fill--income {
+  background: var(--color-mint);
+}
+.dashboard__spend-tick {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  background: var(--color-ink);
+  border-radius: 1px;
+}
+
 /* 每月固定支出 — 自建清單＋繳費狀態 */
 .dashboard__fixed-header-side {
   display: inline-flex;
@@ -101,8 +155,15 @@
 }
 .dashboard__fixed-actions {
   display: inline-flex;
+  align-items: center;
   gap: 6px;
   justify-self: end;
+}
+.dashboard__fixed-paid-date {
+  width: 132px;
+  min-height: 30px;
+  padding: 4px 6px;
+  font-size: 12px;
 }
 .dashboard__fixed-danger {
   border-color: var(--color-apricot-border);

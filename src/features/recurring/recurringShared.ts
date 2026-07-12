@@ -1,6 +1,4 @@
-/* Shared fixed-cost helpers used by the management page and the
-   Overview due-this-month card. Metadata (tags/currency) rides in the
-   recurring item note via markers, matching the data-layer convention. */
+/* Shared fixed-cost helpers used by the management page and overview card. */
 
 import { CATEGORY_DEFINITIONS } from '../../data/categoryDefinitions';
 import type { RecurringCycle, RecurringExpense, Transaction } from '../../types/models';
@@ -9,8 +7,12 @@ export const FIXED_CATEGORY_OPTIONS = CATEGORY_DEFINITIONS.filter(
   (category) => category.kind === 'expense',
 ).map((category) => category.name);
 export const DEFAULT_FIXED_CATEGORY = FIXED_CATEGORY_OPTIONS[0] ?? '';
+
 const RECURRING_TAGS_RE = /\[tags:([^\]]*)\]/i;
 const RECURRING_CURRENCY_RE = /\[currency:([A-Z]{3})\]/i;
+const RECURRING_PAYMENTS_RE = /\[payments:([^\]]*)\]/i;
+const RECURRING_PLANS_RE = /\[plans:([^\]]*)\]/i;
+
 export const CURRENCY_OPTIONS = ['TWD', 'USD', 'JPY', 'EUR', 'CNY', 'HKD'];
 export const CYCLE_OPTIONS: { value: RecurringCycle; label: string }[] = [
   { value: 'monthly', label: '月繳' },
@@ -97,29 +99,88 @@ export function fixedDueText(item: RecurringExpense) {
   return dueMonthDay ? `下次 ${dueMonthDay}` : '';
 }
 
-export function recurringTags(item: RecurringExpense) {
+function splitMarker(value: string | undefined, pattern: RegExp) {
   return (
-    item.note
-      ?.match(RECURRING_TAGS_RE)?.[1]
+    value
+      ?.match(pattern)?.[1]
       ?.split(/[,\n，、]/)
-      .map((tag) => tag.trim())
+      .map((part) => part.trim())
       .filter(Boolean) ?? []
   );
 }
 
+export function recurringTags(item: RecurringExpense) {
+  return splitMarker(item.note, RECURRING_TAGS_RE);
+}
+
+export function recurringPaymentDates(item: RecurringExpense) {
+  return splitMarker(item.note, RECURRING_PAYMENTS_RE).sort((a, b) => b.localeCompare(a));
+}
+
+export function recurringPlanChanges(item: RecurringExpense) {
+  return splitMarker(item.note, RECURRING_PLANS_RE).sort((a, b) => b.localeCompare(a));
+}
+
+function stripRecurringMarkers(note: string | undefined) {
+  return (
+    note
+      ?.replace(RECURRING_TAGS_RE, '')
+      .replace(RECURRING_CURRENCY_RE, '')
+      .replace(RECURRING_PAYMENTS_RE, '')
+      .replace(RECURRING_PLANS_RE, '')
+      .trim() ?? ''
+  );
+}
+
 export function recurringPlainNote(item: RecurringExpense) {
-  return item.note?.replace(RECURRING_TAGS_RE, '').replace(RECURRING_CURRENCY_RE, '').trim() ?? '';
+  return stripRecurringMarkers(item.note);
 }
 
 export function recurringCurrency(item: RecurringExpense) {
   return item.note?.match(RECURRING_CURRENCY_RE)?.[1] ?? 'TWD';
 }
 
-export function noteWithRecurringMeta(note: string, tag: string, currency: string) {
-  const cleanNote = note.replace(RECURRING_TAGS_RE, '').replace(RECURRING_CURRENCY_RE, '').trim();
+export function noteWithRecurringMeta(
+  note: string,
+  tag: string,
+  currency: string,
+  payments: string[] = [],
+  plans: string[] = [],
+) {
+  const cleanNote = stripRecurringMarkers(note);
   const tagMarker = tag ? `[tags:${tag}]` : '';
   const currencyMarker = currency && currency !== 'TWD' ? `[currency:${currency}]` : '';
-  return [cleanNote, tagMarker, currencyMarker].filter(Boolean).join(' ');
+  const paymentMarker = payments.length > 0 ? `[payments:${[...new Set(payments)].join(',')}]` : '';
+  const planMarker = plans.length > 0 ? `[plans:${[...new Set(plans)].join(',')}]` : '';
+  return [cleanNote, tagMarker, currencyMarker, paymentMarker, planMarker].filter(Boolean).join(' ');
+}
+
+export function noteWithAddedPayment(item: RecurringExpense, paidDate: string) {
+  return noteWithRecurringMeta(
+    recurringPlainNote(item),
+    recurringTags(item)[0] ?? '',
+    recurringCurrency(item),
+    [paidDate, ...recurringPaymentDates(item)],
+    recurringPlanChanges(item),
+  );
+}
+
+export function noteWithAddedPlanChange(
+  item: RecurringExpense,
+  changedAt: string,
+  oldAmount: number,
+  newAmount: number,
+  oldCycle: RecurringCycle,
+  newCycle: RecurringCycle,
+) {
+  const entry = `${changedAt}:${oldCycle}-${oldAmount}->${newCycle}-${newAmount}`;
+  return noteWithRecurringMeta(
+    recurringPlainNote(item),
+    recurringTags(item)[0] ?? '',
+    recurringCurrency(item),
+    recurringPaymentDates(item),
+    [entry, ...recurringPlanChanges(item)],
+  );
 }
 
 export function fixedItemToForm(item: RecurringExpense): FixedItemForm {
@@ -140,7 +201,6 @@ function normalizeFixedText(value: string | undefined | null) {
   return (value ?? '').toLowerCase().replace(/\s+/g, '');
 }
 
-/** Auto-paid: a this-month expense matches the item by amount + context. */
 export function recurringPaidByTransaction(item: RecurringExpense, transactions: Transaction[]) {
   const itemName = normalizeFixedText(item.name);
   const amount = itemChargeAmount(item);
@@ -150,9 +210,7 @@ export function recurringPaidByTransaction(item: RecurringExpense, transactions:
     const amountMatches = amount > 0 && Math.abs(tx.amount - amount) <= 1;
     const categoryMatches = Boolean(item.category) && tx.category === item.category;
     const tagMatches = itemTag ? tx.tags.includes(itemTag) : false;
-    const haystack = normalizeFixedText(
-      `${tx.note} ${tx.category} ${tx.account} ${tx.tags.join(' ')}`,
-    );
+    const haystack = normalizeFixedText(`${tx.note} ${tx.category} ${tx.account} ${tx.tags.join(' ')}`);
     const textMatches = itemName.length >= 2 && haystack.includes(itemName);
     return (
       (amountMatches && (categoryMatches || tagMatches || textMatches)) ||
@@ -168,6 +226,7 @@ export function isPaidThisMonth(
 ) {
   return (
     (item.lastPaid ?? '').startsWith(monthKey) ||
+    recurringPaymentDates(item).some((date) => date.startsWith(monthKey)) ||
     recurringPaidByTransaction(item, monthTransactions)
   );
 }

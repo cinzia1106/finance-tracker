@@ -9,12 +9,6 @@ import {
   previewCsvImport,
   type ConfirmedImportResult,
 } from './importWorkflow';
-import {
-  convertCtbcDepositPdf,
-  convertPostOfficeCsv,
-  type StatementConversionResult,
-  type StatementSource,
-} from './statementConverter';
 import './import.css';
 
 declare global {
@@ -36,7 +30,7 @@ const STATUS_LABELS = {
 const BATCH_STATUS_LABELS: Record<ImportBatch['status'], string> = {
   uploaded: '已上傳',
   processing: '處理中',
-  completed: '已完成',
+  completed: '完成',
   failed: '失敗',
 };
 
@@ -78,16 +72,11 @@ function resultSummary(result: ConfirmedImportResult) {
 export default function ImportPage() {
   const adapter = useAdapter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const converterInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [batches, setBatches] = useState<ImportBatch[]>([]);
-  const [statementSource, setStatementSource] = useState<StatementSource>('post-office-csv');
-  const [statementAccount, setStatementAccount] = useState('');
-  const [conversion, setConversion] = useState<StatementConversionResult | null>(null);
-  const [conversionFileName, setConversionFileName] = useState<string | null>(null);
 
   const rowsToImport = useMemo(() => importableRows(preview), [preview]);
 
@@ -149,47 +138,6 @@ export default function ImportPage() {
     }
   }
 
-  async function convertStatementFile(file: File) {
-    setBusy(true);
-    setError(null);
-    setConversion(null);
-    setConversionFileName(null);
-    try {
-      const accountName =
-        statementAccount.trim() ||
-        (statementSource === 'post-office-csv' ? '郵局' : '中信 Deposit');
-      const result =
-        statementSource === 'post-office-csv'
-          ? convertPostOfficeCsv(await file.text(), accountName)
-          : await convertCtbcDepositPdf(file, accountName);
-      setConversion(result);
-      setConversionFileName(file.name.replace(/\.[^.]+$/, '-standard.csv'));
-      setPreview(await previewCsvImport(adapter, result.csvText));
-      setFileName(file.name.replace(/\.[^.]+$/, '-standard.csv'));
-      if (result.rows.length === 0) {
-        setError('轉檔沒有辨識到任何交易。請確認來源格式是否選對，或先下載銀行明細的 CSV/文字型 PDF。');
-      }
-    } catch (err) {
-      setPreview(null);
-      setConversion(null);
-      setConversionFileName(null);
-      setError(getErrorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function downloadConvertedCsv() {
-    if (!conversion) return;
-    const blob = new Blob([conversion.csvText], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = conversionFileName ?? 'statement-standard.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
   async function confirmImport() {
     if (!preview || rowsToImport.length === 0 || !adapter.createImportBatch) return;
 
@@ -198,7 +146,6 @@ export default function ImportPage() {
 
     try {
       await confirmCsvImport(adapter, preview, fileName);
-
       setPreview(null);
       setFileName(null);
       setBatches((await adapter.listImportBatches?.()) ?? []);
@@ -242,9 +189,9 @@ export default function ImportPage() {
       </header>
 
       <div className="grid-12">
-        <section className="card span-6">
+        <section className="card span-12">
           <div className="card__header">
-            <h2 className="h2">上傳 CSV</h2>
+            <h2 className="h2">標準 CSV</h2>
             <span className="micro import-card-note">清理後的標準格式</span>
           </div>
           <button
@@ -260,7 +207,7 @@ export default function ImportPage() {
             disabled={busy}
           >
             <span className="mono import-schema">date,type,amount,category,account,to_account,note,tag</span>
-            <span className="caption">拖放 CSV 到這裡，或點擊選擇檔案</span>
+            <span className="caption">拖放 cleaned CSV 到這裡，或點擊選擇檔案</span>
           </button>
           <input
             ref={inputRef}
@@ -274,105 +221,13 @@ export default function ImportPage() {
           />
           {error && <div className="import-error">{error}</div>}
           <div className="caption import-rules-note">
-            重複列以去重鍵自動略過；欄位錯誤列不會入帳；不明轉入轉出與高額「其他」列會標記為待確認。
-          </div>
-        </section>
-
-        <section className="card span-6">
-          <div className="card__header">
-            <h2 className="h2">帳單轉檔</h2>
-            <span className="micro import-card-note">銀行帳單 → 標準 CSV</span>
-          </div>
-          <div className="form-grid">
-            <label className="form-field">
-              <span className="micro">來源格式</span>
-              <select
-                className="text-input"
-                value={statementSource}
-                onChange={(event) => {
-                  setStatementSource(event.target.value as StatementSource);
-                  setConversion(null);
-                  setConversionFileName(null);
-                }}
-              >
-                <option value="post-office-csv">郵局 CSV</option>
-                <option value="ctbc-deposit-pdf">中信存款 PDF</option>
-              </select>
-            </label>
-            <label className="form-field">
-              <span className="micro">帳戶名稱</span>
-              <input
-                className="text-input"
-                value={statementAccount}
-                onChange={(event) => setStatementAccount(event.target.value)}
-                placeholder={statementSource === 'post-office-csv' ? '郵局' : '中信 Deposit'}
-              />
-            </label>
-          </div>
-          <button
-            type="button"
-            className="import-dropzone"
-            onClick={() => converterInputRef.current?.click()}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              const file = event.dataTransfer.files[0];
-              if (file) void convertStatementFile(file);
-            }}
-            disabled={busy}
-          >
-            <span className="mono import-schema">
-              {statementSource === 'post-office-csv' ? '.csv' : '.pdf'} → date,type,amount,category,account,to_account,note,tag
-            </span>
-            <span className="caption">拖放帳單檔案到這裡，或點擊選擇檔案</span>
-          </button>
-          <input
-            ref={converterInputRef}
-            type="file"
-            accept={statementSource === 'post-office-csv' ? '.csv,text/csv' : '.pdf,application/pdf'}
-            className="import-file-input"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void convertStatementFile(file);
-            }}
-          />
-          {conversion && (
-            <div className="row-list import-converter-result">
-              <div className="list-row">
-                <span>轉換筆數</span>
-                <span className="mono">{conversion.rows.length}</span>
-              </div>
-              <div className="list-row">
-                <span>待確認</span>
-                <span className="mono">
-                  {conversion.rows.filter((row) => row.confidence === 'review').length}
-                </span>
-              </div>
-              {conversion.warnings.map((warning) => (
-                <div key={warning} className="caption import-row-note">
-                  {warning}
-                </div>
-              ))}
-              <div className="form-actions">
-                <button
-                  type="button"
-                  className="btn btn--secondary btn--sm"
-                  onClick={downloadConvertedCsv}
-                  disabled={conversion.rows.length === 0}
-                >
-                  下載標準 CSV
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="caption import-rules-note">
-            自動判斷提款、轉帳、股利、證券款；不確定項目會加上 needs_review 標記，仍需在右側預覽後才匯入。
+            只支援標準 CSV。匯入前會先驗證、預覽、dedupe，按確認後才寫入資料。
           </div>
         </section>
 
         <section className="card span-12">
           <div className="card__header">
-            <h2 className="h2">驗證預覽</h2>
+            <h2 className="h2">匯入預覽</h2>
             <button
               type="button"
               className="btn btn--primary"
@@ -388,7 +243,7 @@ export default function ImportPage() {
         {preview && (
           <>
             <section className="card span-6">
-              <h2 className="h2">每月摘要</h2>
+              <h2 className="h2">月份摘要</h2>
               <div className="row-list">
                 {preview.summary.monthly.map((month) => (
                   <div key={month.month} className="list-row import-summary-row">
@@ -414,10 +269,10 @@ export default function ImportPage() {
             </section>
 
             <section className="card span-12">
-              <h2 className="h2">逐列結果</h2>
+              <h2 className="h2">逐筆預覽</h2>
               <div className="import-table">
                 <div className="data-table__head import-table__grid">
-                  <span>列</span>
+                  <span>#</span>
                   <span>日期</span>
                   <span>類型</span>
                   <span>分類</span>
@@ -430,11 +285,11 @@ export default function ImportPage() {
                     <span className="mono caption">{row.rowNumber}</span>
                     <span className="mono">{row.record.date}</span>
                     <span>{TYPE_LABELS[row.record.type] ?? row.record.type}</span>
-                    <span className="cell-ellipsis">{row.record.category || '—'}</span>
+                    <span className="cell-ellipsis">{row.record.category || '未分類'}</span>
                     <span className="cell-ellipsis">
                       {row.record.to_account
                         ? `${row.record.account} → ${row.record.to_account}`
-                        : row.record.account || '—'}
+                        : row.record.account || '未指定'}
                     </span>
                     <span className="mono cell-right">{formatSigned(Number(row.record.amount) || 0)}</span>
                     <span>
@@ -454,7 +309,7 @@ export default function ImportPage() {
 
         <section className="card span-12">
           <div className="card__header">
-            <h2 className="h2">匯入紀錄</h2>
+            <h2 className="h2">匯入批次</h2>
             <button
               type="button"
               className="btn btn--secondary"
@@ -467,7 +322,7 @@ export default function ImportPage() {
             </button>
           </div>
           <div className="row-list">
-            {batches.length === 0 && <div className="caption import-empty">尚無匯入紀錄</div>}
+            {batches.length === 0 && <div className="caption import-empty">尚無匯入批次</div>}
             {batches.map((batch) => (
               <div key={batch.id} className="list-row import-batch-row">
                 <span className="import-batch-row__main">
@@ -480,7 +335,7 @@ export default function ImportPage() {
                   <span className={`import-batch-badge import-batch-badge--${batch.status}`}>
                     {BATCH_STATUS_LABELS[batch.status]}
                   </span>
-                  <span className="mono caption">{batch.rowCount} 列</span>
+                  <span className="mono caption">{batch.rowCount} 筆</span>
                 </span>
                 <button
                   type="button"
@@ -488,7 +343,7 @@ export default function ImportPage() {
                   onClick={() => void rollback(batch.id)}
                   disabled={busy}
                 >
-                  回復此批次
+                  Rollback
                 </button>
               </div>
             ))}
@@ -501,11 +356,11 @@ export default function ImportPage() {
 
 function PreviewSummary({ preview }: { preview: ImportPreview }) {
   const stats: [string, number, string][] = [
-    ['讀取', preview.summary.total, ''],
+    ['總筆數', preview.summary.total, ''],
     ['新增', preview.summary.newCount, 'good'],
     ['重複略過', preview.summary.duplicateCount, ''],
     ['待確認', preview.summary.needsReviewCount, 'warn'],
-    ['欄位錯誤', preview.summary.errorCount, 'bad'],
+    ['錯誤', preview.summary.errorCount, 'bad'],
   ];
 
   return (
@@ -526,7 +381,7 @@ function PreviewSummary({ preview }: { preview: ImportPreview }) {
 function EmptyPreview() {
   return (
     <div className="import-empty">
-      <span className="caption">尚未選擇檔案。上傳後這裡會顯示讀取、新增、重複、待確認與錯誤筆數。</span>
+      <span className="caption">尚未選擇 CSV。上傳後會先產生預覽，不會直接寫入資料。</span>
     </div>
   );
 }

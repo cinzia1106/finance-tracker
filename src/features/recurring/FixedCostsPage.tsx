@@ -1,9 +1,7 @@
-/* 固定支出管理頁 — 訂閱、分期、健康等固定項目的完整清單與編輯。
-   本月繳費狀態 = lastPaid 落在本月，或本月已有相符交易（自動判定）。 */
-
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAdapter } from '../../data/AdapterContext';
+import { tagsForCategory } from '../../data/categoryDefinitions';
 import { useAppOutletContext } from '../../layout/AppLayout';
 import { formatPlain } from '../../lib/format';
 import type { RecurringExpense, Transaction } from '../../types/models';
@@ -21,11 +19,17 @@ import {
   itemAmount,
   itemChargeAmount,
   monthlyEquivalent,
+  noteWithAddedPayment,
   noteWithRecurringMeta,
   recurringCurrency,
+  recurringPaymentDates,
+  recurringPlanChanges,
   recurringTags,
 } from './recurringShared';
-import { tagsForCategory } from '../../data/categoryDefinitions';
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export default function FixedCostsPage() {
   const adapter = useAdapter();
@@ -40,6 +44,7 @@ export default function FixedCostsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState<FixedItemForm>(emptyFixedItemForm);
   const [editForm, setEditForm] = useState<FixedItemForm>(emptyFixedItemForm);
+  const [paymentDates, setPaymentDates] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -130,6 +135,12 @@ export default function FixedCostsPage() {
       return;
     }
     const billingDay = editForm.billingDay ? Number(editForm.billingDay) : null;
+    const oldAmount = itemChargeAmount(item);
+    const planChanged = oldAmount !== amount || item.cycle !== editForm.cycle;
+    const plans = recurringPlanChanges(item);
+    const nextPlans = planChanged
+      ? [`${today()}:${cycleLabel(item.cycle)}-${oldAmount}->${cycleLabel(editForm.cycle)}-${amount}`, ...plans]
+      : plans;
     setBusyId(item.id);
     setError(null);
     try {
@@ -142,7 +153,13 @@ export default function FixedCostsPage() {
         billingDay: billingDay && billingDay >= 1 && billingDay <= 31 ? billingDay : null,
         active: true,
         nextDue: editForm.nextDue || undefined,
-        note: noteWithRecurringMeta(editForm.note, editForm.tag, editForm.currency),
+        note: noteWithRecurringMeta(
+          editForm.note,
+          editForm.tag,
+          editForm.currency,
+          recurringPaymentDates(item),
+          nextPlans,
+        ),
       });
       setRecurring((previous) => previous.map((row) => (row.id === item.id ? updated : row)));
       setEditId(null);
@@ -153,20 +170,33 @@ export default function FixedCostsPage() {
     }
   }
 
-  async function setPaid(item: RecurringExpense, paid: boolean) {
-    if (!adapter.updateRecurringItem || !item.id) return;
-    const lastPaid = paid ? new Date().toISOString().slice(0, 10) : null;
+  async function recordPayment(item: RecurringExpense, paidDate: string) {
+    if (!adapter.updateRecurringItem || !item.id || !paidDate) return;
     setBusyId(item.id);
     setError(null);
     try {
-      await adapter.updateRecurringItem(item.id, { lastPaid });
-      setRecurring((previous) =>
-        previous.map((row) =>
-          row.id === item.id ? { ...row, lastPaid: lastPaid ?? undefined } : row,
-        ),
-      );
+      const updated = await adapter.updateRecurringItem(item.id, {
+        lastPaid: paidDate,
+        note: noteWithAddedPayment(item, paidDate),
+      });
+      setRecurring((previous) => previous.map((row) => (row.id === item.id ? updated : row)));
+      setPaymentDates((previous) => ({ ...previous, [item.id ?? '']: paidDate }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : '更新失敗，請稍後再試。');
+      setError(err instanceof Error ? err.message : '繳費紀錄更新失敗。');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function clearCurrentPaid(item: RecurringExpense) {
+    if (!adapter.updateRecurringItem || !item.id) return;
+    setBusyId(item.id);
+    setError(null);
+    try {
+      const updated = await adapter.updateRecurringItem(item.id, { lastPaid: null });
+      setRecurring((previous) => previous.map((row) => (row.id === item.id ? updated : row)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '狀態更新失敗。');
     } finally {
       setBusyId(null);
     }
@@ -201,13 +231,13 @@ export default function FixedCostsPage() {
           <span className="micro">名稱</span>
           <input
             className="text-input"
-            placeholder="Adobe / 健身房 / 筆電分期…"
+            placeholder="Adobe / 健身房 / 分期項目"
             value={form.name}
             onChange={(event) => setForm({ ...form, name: event.target.value })}
           />
         </label>
         <label className="form-field">
-          <span className="micro">金額</span>
+          <span className="micro">應繳金額</span>
           <input
             className="text-input mono"
             type="number"
@@ -261,7 +291,7 @@ export default function FixedCostsPage() {
           </select>
         </label>
         <label className="form-field">
-          <span className="micro">標籤（選填）</span>
+          <span className="micro">標籤</span>
           <select
             className="text-input"
             value={form.tag}
@@ -276,7 +306,7 @@ export default function FixedCostsPage() {
           </select>
         </label>
         <label className="form-field">
-          <span className="micro">每月扣款日（選填）</span>
+          <span className="micro">月繳扣款日</span>
           <input
             className="text-input mono"
             type="number"
@@ -288,7 +318,7 @@ export default function FixedCostsPage() {
           />
         </label>
         <label className="form-field">
-          <span className="micro">下次扣款（選填）</span>
+          <span className="micro">下次扣款</span>
           <input
             className="text-input"
             type="date"
@@ -297,7 +327,7 @@ export default function FixedCostsPage() {
           />
         </label>
         <label className="form-field form-field--wide">
-          <span className="micro">備註（選填）</span>
+          <span className="micro">備註</span>
           <input
             className="text-input"
             value={form.note}
@@ -327,13 +357,13 @@ export default function FixedCostsPage() {
     <>
       <header className="page-header">
         <div className="page-header__lead">
-          <Link to="/" className="back-header__btn mobile-only" aria-label="返回總覽">
-            ‹
+          <Link to="/" className="back-header__btn mobile-only" aria-label="回總覽">
+            ←
           </Link>
           <h1 className="h1">固定支出</h1>
           {rows.length > 0 && (
             <span className="caption">
-              本月已繳 {paidCount}/{rows.length} · 月承諾 {formatPlain(monthlyTotal)}
+              已支出 {paidCount}/{rows.length} · TWD 月均 {formatPlain(monthlyTotal)}
             </span>
           )}
         </div>
@@ -342,7 +372,7 @@ export default function FixedCostsPage() {
           className="btn btn--primary"
           onClick={() => setShowAdd((value) => !value)}
         >
-          {showAdd ? '收合' : '＋ 新增項目'}
+          {showAdd ? '收起' : '＋ 新增項目'}
         </button>
       </header>
 
@@ -361,108 +391,133 @@ export default function FixedCostsPage() {
         <section className="card span-12">
           {rows.length === 0 && !showAdd ? (
             <span className="caption dashboard__fixed-empty">
-              尚未建立固定支出。按「＋ 新增項目」把訂閱軟體、分期、健身等固定項目列進來，
-              總覽會自動提醒本月待繳的項目。
+              尚未建立固定支出。可新增軟體方案、分期、年繳或其他固定繳費項目。
             </span>
           ) : (
             <div className="dashboard__fixed-list">
-              {rows.map(({ item, paid }) => (
-                <div key={item.id} className="dashboard__fixed-row">
-                  <span className="dashboard__fixed-name cell-ellipsis" title={item.name}>
-                    {item.name}
-                    <span className="micro dashboard__fixed-meta">
-                      {' '}
-                      {item.category}
-                      {recurringTags(item)[0] ? ` · ${recurringTags(item)[0]}` : ''}
-                      {` · ${cycleLabel(item.cycle)}`}
-                      {fixedDueText(item) ? ` · ${fixedDueText(item)}` : ''}
+              {rows.map(({ item, paid }) => {
+                const itemId = item.id ?? item.name;
+                const paymentDate = paymentDates[itemId] ?? today();
+                const paymentHistory = recurringPaymentDates(item).slice(0, 3);
+                const planHistory = recurringPlanChanges(item).slice(0, 2);
+                return (
+                  <div key={itemId} className="dashboard__fixed-row">
+                    <span className="dashboard__fixed-name cell-ellipsis" title={item.name}>
+                      {item.name}
+                      <span className="micro dashboard__fixed-meta">
+                        {' '}
+                        {item.category}
+                        {recurringTags(item)[0] ? ` · ${recurringTags(item)[0]}` : ''}
+                        {` · ${cycleLabel(item.cycle)}`}
+                        {fixedDueText(item) ? ` · ${fixedDueText(item)}` : ''}
+                        {paymentHistory.length > 0 ? ` · 繳費 ${paymentHistory.join('、')}` : ''}
+                        {planHistory.length > 0 ? ` · 方案 ${planHistory.join('、')}` : ''}
+                      </span>
                     </span>
-                  </span>
-                  <span className="amount-s dashboard__fixed-amount">
-                    {recurringCurrency(item) !== 'TWD' ? `${recurringCurrency(item)} ` : ''}
-                    {formatPlain(itemChargeAmount(item))}
-                  </span>
-                  {paid ? (
-                    <button
-                      type="button"
-                      className="badge badge--confirmed dashboard__fixed-badge"
-                      disabled={busyId === item.id}
-                      title="點擊改為待繳"
-                      onClick={() => void setPaid(item, false)}
-                    >
-                      <span className="badge__dot" />
-                      已繳費
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="badge badge--review dashboard__fixed-badge"
-                      disabled={busyId === item.id}
-                      title="點擊標記為已繳"
-                      onClick={() => void setPaid(item, true)}
-                    >
-                      <span className="badge__dot" />
-                      待繳
-                    </button>
-                  )}
-                  {deleteConfirmId === item.id ? (
-                    <span className="dashboard__fixed-actions">
+                    <span className="amount-s dashboard__fixed-amount">
+                      {recurringCurrency(item) !== 'TWD' ? `${recurringCurrency(item)} ` : ''}
+                      {formatPlain(itemChargeAmount(item))}
+                    </span>
+                    {paid ? (
                       <button
                         type="button"
-                        className="btn btn--secondary btn--sm dashboard__fixed-danger"
+                        className="badge badge--confirmed dashboard__fixed-badge"
                         disabled={busyId === item.id}
-                        onClick={() => void removeItem(item)}
+                        onClick={() => void clearCurrentPaid(item)}
                       >
-                        確認刪除
+                        <span className="badge__dot" />
+                        已繳費
                       </button>
+                    ) : (
                       <button
                         type="button"
-                        className="btn btn--secondary btn--sm"
-                        onClick={() => setDeleteConfirmId(null)}
+                        className="badge badge--review dashboard__fixed-badge"
+                        disabled={busyId === item.id}
+                        onClick={() => void recordPayment(item, paymentDate)}
                       >
-                        取消
+                        <span className="badge__dot" />
+                        待繳
                       </button>
-                    </span>
-                  ) : (
-                    <span className="dashboard__fixed-actions">
-                      <button
-                        type="button"
-                        className="btn btn--secondary btn--sm"
-                        onClick={() => startEdit(item)}
+                    )}
+                    {deleteConfirmId === item.id ? (
+                      <span className="dashboard__fixed-actions">
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm dashboard__fixed-danger"
+                          disabled={busyId === item.id}
+                          onClick={() => void removeItem(item)}
+                        >
+                          確認刪除
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => setDeleteConfirmId(null)}
+                        >
+                          取消
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="dashboard__fixed-actions">
+                        <input
+                          className="text-input mono dashboard__fixed-paid-date"
+                          type="date"
+                          value={paymentDate}
+                          onChange={(event) =>
+                            setPaymentDates((previous) => ({
+                              ...previous,
+                              [itemId]: event.target.value,
+                            }))
+                          }
+                          title="繳費日期"
+                        />
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          disabled={busyId === item.id}
+                          onClick={() => void recordPayment(item, paymentDate)}
+                        >
+                          記錄繳費
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => startEdit(item)}
+                        >
+                          編輯
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard__fixed-delete"
+                          aria-label={`刪除 ${item.name}`}
+                          title="刪除"
+                          onClick={() => setDeleteConfirmId(item.id ?? null)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )}
+                    {editId === item.id && (
+                      <form
+                        onSubmit={(event) => void updateItem(event, item)}
+                        className="form-grid dashboard__fixed-edit-form"
                       >
-                        編輯
-                      </button>
-                      <button
-                        type="button"
-                        className="dashboard__fixed-delete"
-                        aria-label={`刪除 ${item.name}`}
-                        title="刪除"
-                        onClick={() => setDeleteConfirmId(item.id ?? null)}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  )}
-                  {editId === item.id && (
-                    <form
-                      onSubmit={(event) => void updateItem(event, item)}
-                      className="form-grid dashboard__fixed-edit-form"
-                    >
-                      {renderForm(editForm, setEditForm, '儲存', busyId === item.id, () =>
-                        setEditId(null),
-                      )}
-                    </form>
-                  )}
-                </div>
-              ))}
+                        {renderForm(editForm, setEditForm, '儲存', busyId === item.id, () =>
+                          setEditId(null),
+                        )}
+                      </form>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
 
         <section className="card span-12">
           <div className="caption" style={{ lineHeight: 1.7 }}>
-            規則：月繳項目每月自動回到「待繳」，本月有相符交易或手動標記即為「已繳費」；
-            年繳／半年繳以月當量計入月承諾；外幣項目不計入台幣月承諾合計。
+            提醒：固定支出的繳費日期與方案變更紀錄會保存在項目備註的內部標記中；不會新增資料表。
+            若方案金額或週期改變，按「編輯」儲存後會留下方案變更紀錄。
           </div>
         </section>
       </div>

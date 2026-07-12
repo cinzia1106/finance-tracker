@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BudgetRow, CountBadge, ReviewBadge } from '../../components/ui';
+import { CountBadge, ReviewBadge } from '../../components/ui';
 import type { MonthOverview } from '../../data/adapter';
 import { useAdapter } from '../../data/AdapterContext';
 import { useAppOutletContext } from '../../layout/AppLayout';
@@ -19,6 +19,30 @@ import {
   recurringCurrency,
 } from '../recurring/recurringShared';
 import './dashboard.css';
+
+function addMonths(date: string, months: number) {
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return '';
+  parsed.setUTCMonth(parsed.getUTCMonth() + months);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function dateInMonth(date: string | undefined, year: number, month: number) {
+  if (!date) return false;
+  return date.startsWith(`${year}-${String(month).padStart(2, '0')}`);
+}
+
+function fixedItemOccursInMonth(item: RecurringExpense, year: number, month: number) {
+  if (item.cycle === 'monthly') return true;
+  if (item.cycle === 'yearly') return dateInMonth(item.nextDue, year, month);
+  if (item.cycle === 'semiannual') {
+    return (
+      dateInMonth(item.nextDue, year, month) ||
+      dateInMonth(item.nextDue ? addMonths(item.nextDue, 6) : undefined, year, month)
+    );
+  }
+  return dateInMonth(item.nextDue, year, month);
+}
 
 export default function DashboardPage() {
   const adapter = useAdapter();
@@ -66,29 +90,31 @@ export default function DashboardPage() {
   const monthKey = `${year}-${String(month).padStart(2, '0')}`;
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
 
-  /** 檢視月份的固定支出繳費狀態；總覽只列出尚未繳費的項目。 */
+  /** 檢視月份的固定支出繳費狀態；狀態改變後仍保留在本月列表。 */
   const fixedDue = useMemo(() => {
-    const active = recurring.filter((item) => item.active !== false);
+    const active = recurring.filter(
+      (item) => item.active !== false && fixedItemOccursInMonth(item, year, month),
+    );
     const rows = active.map((item) => ({
       item,
       paid: isPaidThisMonth(item, monthKey, monthTransactions),
     }));
-    const due = rows.filter((row) => !row.paid);
-    due.sort(
+    rows.sort(
       (a, b) =>
         cycleRank(a.item.cycle) - cycleRank(b.item.cycle) ||
+        Number(a.paid) - Number(b.paid) ||
         itemAmount(b.item) - itemAmount(a.item),
     );
     return {
-      due,
+      rows,
       totalCount: rows.length,
-      paidCount: rows.length - due.length,
-      dueTotal: due.reduce(
+      paidCount: rows.filter((row) => row.paid).length,
+      total: rows.reduce(
         (sum, row) => sum + (recurringCurrency(row.item) === 'TWD' ? itemChargeAmount(row.item) : 0),
         0,
       ),
     };
-  }, [recurring, monthKey, monthTransactions]);
+  }, [recurring, year, month, monthKey, monthTransactions]);
 
   async function markPaid(item: RecurringExpense) {
     if (!adapter.updateRecurringItem || !item.id) return;
@@ -181,25 +207,16 @@ export default function DashboardPage() {
               轉帳 {data.transferCount} 筆，不列入收支
             </span>
           </div>
-          {data.incomeBySource.length > 0 && (
-            <div className="dashboard__income-sources desktop-only">
-              {data.incomeBySource.map((source) => (
-                <span key={source.source}>
-                  {source.source} <span className="mono">{formatPlain(source.amount)}</span>
-                </span>
-              ))}
-            </div>
-          )}
         </section>
 
-        {/* 本月待繳 — 只列未繳的固定支出；管理在固定支出頁 */}
+        {/* 本月固定支出 — 列出檢視月份所有固定支出，狀態變更後仍保留 */}
         <section className="card span-7">
           <div className="card__header">
-            <h2 className="h2">本月待繳</h2>
+            <h2 className="h2">本月固定支出</h2>
             <span className="dashboard__fixed-header-side">
-              {fixedDue.due.length > 0 && (
+              {fixedDue.totalCount > 0 && (
                 <span className="micro dashboard__group-note">
-                  {fixedDue.due.length} 筆 · 合計 {formatPlain(fixedDue.dueTotal)}
+                  已繳 {fixedDue.paidCount}/{fixedDue.totalCount} · TWD {formatPlain(fixedDue.total)}
                 </span>
               )}
               <Link to="/recurring" className="caption dashboard__card-link">
@@ -213,16 +230,12 @@ export default function DashboardPage() {
           {fixedDue.totalCount === 0 ? (
             <span className="caption dashboard__fixed-empty">
               尚未建立固定支出。到「固定支出」頁把訂閱軟體、分期、健身等項目列進來，
-              每月待繳的會自動出現在這裡。
-            </span>
-          ) : fixedDue.due.length === 0 ? (
-            <span className="caption dashboard__fixed-allpaid">
-              ✓ 本月固定支出已全數繳清（{fixedDue.paidCount} 筆）
+              當月固定支出會自動出現在這裡。
             </span>
           ) : (
             <div className="dashboard__fixed-list">
-              {fixedDue.due.map(({ item }) => (
-                <div key={item.id} className="dashboard__fixed-row dashboard__fixed-row--due">
+              {fixedDue.rows.map(({ item, paid }) => (
+                <div key={item.id} className="dashboard__fixed-row">
                   <span className="dashboard__fixed-name cell-ellipsis" title={item.name}>
                     {item.name}
                     <span className="micro dashboard__fixed-meta">
@@ -235,37 +248,119 @@ export default function DashboardPage() {
                     {recurringCurrency(item) !== 'TWD' ? `${recurringCurrency(item)} ` : ''}
                     {formatPlain(itemChargeAmount(item))}
                   </span>
-                  <button
-                    type="button"
-                    className="badge badge--review dashboard__fixed-badge"
-                    disabled={busyId === item.id}
-                    title="點擊標記為已繳"
-                    onClick={() => void markPaid(item)}
-                  >
-                    <span className="badge__dot" />
-                    標記已繳
-                  </button>
+                  {paid ? (
+                    <span className="badge badge--confirmed dashboard__fixed-badge">
+                      <span className="badge__dot" />
+                      已繳費
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="badge badge--review dashboard__fixed-badge"
+                      disabled={busyId === item.id}
+                      title="點擊標記為已繳"
+                      onClick={() => void markPaid(item)}
+                    >
+                      <span className="badge__dot" />
+                      待繳
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </section>
 
-        {/* 分類預算 — 本月支出 vs 預算 */}
-        <section className="card span-6">
+        {/* 分類支出 — 各分類支出總額＋預算截止線 */}
+        <section className="card span-4">
           <div className="card__header">
-            <h2 className="h2">分類預算</h2>
-            <span className="micro dashboard__group-note">本月支出 vs 預算</span>
+            <h2 className="h2">分類支出</h2>
+            <span className="micro dashboard__group-note">刻度＝預算截止線</span>
           </div>
           {data.budgets.length === 0 ? (
-            <span className="caption">尚未設定預算。可於設定頁配置各分類預算。</span>
+            <span className="caption">本月尚無支出資料。</span>
           ) : (
-            data.budgets.map((budget) => <BudgetRow key={budget.category} {...budget} />)
+            (() => {
+              const scale =
+                Math.max(...data.budgets.map((row) => Math.max(row.spent, row.budget)), 1) * 1.08;
+              return data.budgets.map((row) => {
+                const over = row.budget > 0 && row.spent > row.budget;
+                const near =
+                  !over && row.budget > 0 && row.spent >= row.budget * 0.9;
+                return (
+                  <div key={row.category} className="dashboard__spend-row">
+                    <div className="dashboard__spend-label">
+                      <span>
+                        {row.category}
+                        {over && (
+                          <span className="micro dashboard__spend-warn"> · 超出預算</span>
+                        )}
+                        {near && (
+                          <span className="micro dashboard__spend-warn"> · 接近上限</span>
+                        )}
+                      </span>
+                      <span className="mono dashboard__spend-num">
+                        {formatPlain(row.spent)}
+                        {row.budget > 0 ? (
+                          <span className="dashboard__spend-budget"> / {formatPlain(row.budget)}</span>
+                        ) : (
+                          <span className="micro dashboard__spend-nobudget"> 未設預算</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="dashboard__spend-track">
+                      <div
+                        className={`dashboard__spend-fill${over ? ' dashboard__spend-fill--over' : ''}`}
+                        style={{ width: `${Math.min((row.spent / scale) * 100, 100).toFixed(1)}%` }}
+                      />
+                      {row.budget > 0 && (
+                        <div
+                          className="dashboard__spend-tick"
+                          style={{ left: `${Math.min((row.budget / scale) * 100, 100).toFixed(1)}%` }}
+                          title={`預算 ${formatPlain(row.budget)}`}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              });
+            })()
+          )}
+        </section>
+
+        {/* 分類收入 */}
+        <section className="card span-4">
+          <div className="card__header">
+            <h2 className="h2">分類收入</h2>
+            <span className="micro dashboard__group-note">本月各來源</span>
+          </div>
+          {data.incomeBySource.length === 0 ? (
+            <span className="caption">本月尚無收入紀錄。</span>
+          ) : (
+            (() => {
+              const maxIncome = Math.max(...data.incomeBySource.map((row) => row.amount), 1);
+              return data.incomeBySource.map((row) => (
+                <div key={row.source} className="dashboard__spend-row">
+                  <div className="dashboard__spend-label">
+                    <span>{row.source}</span>
+                    <span className="mono dashboard__spend-num income">
+                      +{formatPlain(row.amount)}
+                    </span>
+                  </div>
+                  <div className="dashboard__spend-track">
+                    <div
+                      className="dashboard__spend-fill dashboard__spend-fill--income"
+                      style={{ width: `${Math.min((row.amount / maxIncome) * 100, 100).toFixed(1)}%` }}
+                    />
+                  </div>
+                </div>
+              ));
+            })()
           )}
         </section>
 
         {/* 信用卡 */}
-        <section className="card span-6">
+        <section className="card span-4">
           <div className="card__header">
             <h2 className="h2">信用卡</h2>
             <span className="micro dashboard__group-note">
