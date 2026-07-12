@@ -58,6 +58,14 @@ function categoryTags(tx: Transaction) {
   return tagsForCategory(tx.category);
 }
 
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+function weekdayOf(date: string) {
+  const d = new Date(`${date}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? '' : `週${WEEKDAYS[d.getDay()]}`;
+}
+
+const PAGE_SIZE = 12;
+
 /** Category options for inline editing, keyed by transaction type;
     always includes the current value so the select never shows blank. */
 function categoryOptions(tx: Transaction) {
@@ -77,12 +85,17 @@ export default function TransactionsPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [accountFilter, setAccountFilter] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
   const [noteEditId, setNoteEditId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transferEditId, setTransferEditId] = useState<string | null>(null);
   const [transferDraft, setTransferDraft] = useState({ from: '', to: '' });
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,13 +135,16 @@ export default function TransactionsPage() {
       if (statusFilter === 'needs_review' && tx.status !== 'needs_review') return false;
       if (statusFilter === 'transfer' && tx.type !== 'transfer') return false;
       if (categoryFilter && tx.category !== categoryFilter) return false;
+      if (accountFilter && tx.account !== accountFilter && tx.toAccount !== accountFilter)
+        return false;
+      if (tagFilter && !tx.tags.includes(tagFilter)) return false;
       if (!q) return true;
       return [tx.note, tx.category, tx.account, tx.toAccount ?? '', ...tx.tags]
         .join(' ')
         .toLowerCase()
         .includes(q);
     });
-  }, [transactions, search, statusFilter, categoryFilter]);
+  }, [transactions, search, statusFilter, categoryFilter, accountFilter, tagFilter]);
 
   /** Rows sharing the spec dedupe key (date|type|amount|account|to|note)
       are flagged as likely duplicates — display only. */
@@ -155,6 +171,26 @@ export default function TransactionsPage() {
     return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
   }, [transactions]);
 
+  const presentAccounts = useMemo(() => {
+    const names = new Set<string>();
+    for (const tx of transactions ?? []) {
+      if (tx.account) names.add(tx.account);
+      if (tx.toAccount) names.add(tx.toAccount);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  }, [transactions]);
+
+  const presentTags = useMemo(() => {
+    const names = new Set<string>();
+    for (const tx of transactions ?? []) for (const t of tx.tags) names.add(t);
+    return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  }, [transactions]);
+
+  // Reset to page 1 whenever the filtered set changes shape
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, categoryFilter, accountFilter, tagFilter, year, month]);
+
   const totals = useMemo(() => {
     let income = 0;
     let expense = 0;
@@ -165,15 +201,24 @@ export default function TransactionsPage() {
     return { income, expense };
   }, [filtered]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paged = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page],
+  );
+
   const byDate = useMemo(() => {
     const groups = new Map<string, Transaction[]>();
-    for (const tx of filtered) {
+    for (const tx of paged) {
       const list = groups.get(tx.date) ?? [];
       list.push(tx);
       groups.set(tx.date, list);
     }
     return [...groups.entries()];
-  }, [filtered]);
+  }, [paged]);
+
+  const pageRowIds = useMemo(() => paged.map((tx) => tx.id), [paged]);
+  const allSelected = pageRowIds.length > 0 && pageRowIds.every((id) => selected.has(id));
 
   const automationSummary = useMemo(
     () => summarizeAutomation(transactions ?? []),
@@ -191,6 +236,76 @@ export default function TransactionsPage() {
       (prev ?? []).map((row) => (row.id === id ? { ...row, ...patch } : row)),
     );
   }
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      if (pageRowIds.every((id) => prev.has(id))) {
+        const next = new Set(prev);
+        pageRowIds.forEach((id) => next.delete(id));
+        return next;
+      }
+      return new Set([...prev, ...pageRowIds]);
+    });
+  }
+
+  /** Apply a patch to every selected row through the existing update path;
+      `derive` can skip a row (return null) or tailor the patch per row. */
+  async function batchApply(
+    derive: (tx: Transaction) => Partial<Transaction> | null,
+    errorMessage: string,
+  ) {
+    if (!adapter.updateTransaction || selected.size === 0) return;
+    const targets = (transactions ?? []).filter((tx) => selected.has(tx.id));
+    setBatchBusy(true);
+    setEditError(null);
+    const done: string[] = [];
+    try {
+      for (const tx of targets) {
+        const patch = derive(tx);
+        if (!patch) {
+          done.push(tx.id);
+          continue;
+        }
+        await adapter.updateTransaction(tx.id, patch);
+        patchLocal(tx.id, patch);
+        done.push(tx.id);
+      }
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : errorMessage);
+    } finally {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        done.forEach((id) => next.delete(id));
+        return next;
+      });
+      setBatchBusy(false);
+    }
+  }
+
+  const batchConfirm = () =>
+    void batchApply(
+      (tx) => (tx.status === 'needs_review' ? { status: 'confirmed' } : null),
+      '批次確認失敗，請稍後再試。',
+    );
+  const batchCategory = (category: string) =>
+    void batchApply(
+      (tx) => (tx.type === 'transfer' || tx.category === category ? null : { category }),
+      '批次改分類失敗，請稍後再試。',
+    );
+  const batchAddTag = (tag: string) =>
+    void batchApply(
+      (tx) => (tx.tags.includes(tag) ? null : { tags: [...tx.tags, tag] }),
+      '批次加標籤失敗，請稍後再試。',
+    );
 
   async function changeCategory(tx: Transaction, category: string) {
     if (!adapter.updateTransaction || category === tx.category) return;
@@ -404,7 +519,8 @@ export default function TransactionsPage() {
         </div>
         <span className="caption tx-totals desktop-only">
           收入 <span className="mono income">+{formatPlain(totals.income)}</span> · 支出{' '}
-          <span className="mono">−{formatPlain(totals.expense)}</span>
+          <span className="mono">−{formatPlain(totals.expense)}</span> ·{' '}
+          <span className="tx-totals-muted">轉帳不計入</span>
         </span>
       </header>
 
@@ -412,38 +528,121 @@ export default function TransactionsPage() {
         <input
           type="search"
           className="text-input tx-search"
-          placeholder="搜尋備註、分類、帳戶或標籤"
+          placeholder="搜尋備註、商家、金額…"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-        <div className="chip-row">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              className={`chip${statusFilter === f.key ? ' chip--active' : ''}`}
-              onClick={() => setStatusFilter(f.key)}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
         <select
-          className={`text-input tx-cat-filter${categoryFilter ? ' tx-cat-filter--active' : ''}`}
+          className={`text-input tx-filter${accountFilter ? ' tx-filter--active' : ''}`}
+          value={accountFilter}
+          onChange={(event) => setAccountFilter(event.target.value)}
+          aria-label="依帳戶篩選"
+        >
+          <option value="">帳戶：全部</option>
+          {presentAccounts.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <select
+          className={`text-input tx-filter${categoryFilter ? ' tx-filter--active' : ''}`}
           value={categoryFilter}
           onChange={(event) => setCategoryFilter(event.target.value)}
           aria-label="依分類篩選"
         >
-          <option value="">全部分類</option>
+          <option value="">分類：全部</option>
           {presentCategories.map((name) => (
             <option key={name} value={name}>
               {name}
             </option>
           ))}
         </select>
+        <select
+          className={`text-input tx-filter${tagFilter ? ' tx-filter--active' : ''}`}
+          value={tagFilter}
+          onChange={(event) => setTagFilter(event.target.value)}
+          aria-label="依標籤篩選"
+        >
+          <option value="">標籤：全部</option>
+          {presentTags.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <select
+          className={`text-input tx-filter${statusFilter !== 'all' ? ' tx-filter--active' : ''}`}
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+          aria-label="依狀態篩選"
+        >
+          {STATUS_FILTERS.map((f) => (
+            <option key={f.key} value={f.key}>
+              狀態：{f.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {editError && <div className="tx-edit-error caption">{editError}</div>}
+
+      {/* Batch toolbar — appears when rows are selected */}
+      {selected.size > 0 && (
+        <div className="tx-batchbar">
+          <span className="tx-batchbar__count">已選 {selected.size} 筆</span>
+          <select
+            className="text-input tx-batchbar__select"
+            value=""
+            disabled={batchBusy}
+            onChange={(event) => {
+              if (event.target.value) batchCategory(event.target.value);
+              event.target.value = '';
+            }}
+            aria-label="批次改分類"
+          >
+            <option value="">改分類…</option>
+            {CATEGORY_DEFINITIONS.filter((c) => c.kind === 'expense').map((c) => (
+              <option key={c.name} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="text-input tx-batchbar__select"
+            value=""
+            disabled={batchBusy}
+            onChange={(event) => {
+              if (event.target.value) batchAddTag(event.target.value);
+              event.target.value = '';
+            }}
+            aria-label="批次加標籤"
+          >
+            <option value="">加標籤…</option>
+            {presentTags.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            disabled={batchBusy}
+            onClick={batchConfirm}
+          >
+            標記已確認
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm tx-batchbar__cancel"
+            disabled={batchBusy}
+            onClick={() => setSelected(new Set())}
+          >
+            取消選取
+          </button>
+        </div>
+      )}
 
       <div className="grid-12">
         {transactions === null ? (
@@ -464,6 +663,14 @@ export default function TransactionsPage() {
             <section className="card span-12 desktop-only">
               <div className="tx-table">
               <div className="data-table__head tx-grid">
+                <span className="tx-check">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    aria-label="全選本頁"
+                  />
+                </span>
                 <span>日期</span>
                 <span>類型</span>
                 <span>分類</span>
@@ -474,16 +681,24 @@ export default function TransactionsPage() {
                 <span>狀態</span>
                 <span />
               </div>
-              {filtered.map((tx, index) => {
+              {paged.map((tx, index) => {
                 // Ledger style: print the date once per day group
-                const dayStart = index === 0 || filtered[index - 1].date !== tx.date;
+                const dayStart = index === 0 || paged[index - 1].date !== tx.date;
                 return (
                 <div key={tx.id} style={{ display: 'contents' }}>
                 <div
                   className={`data-table__row tx-grid${rowStateClass(tx)}${
-                    dayStart && index > 0 ? ' tx-row--day-start' : ''
-                  }`}
+                    selected.has(tx.id) ? ' tx-row--selected' : ''
+                  }${dayStart && index > 0 ? ' tx-row--day-start' : ''}`}
                 >
+                  <span className="tx-check">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(tx.id)}
+                      onChange={() => toggleSelect(tx.id)}
+                      aria-label="選取這筆"
+                    />
+                  </span>
                   <span className="mono caption">{dayStart ? tx.date.slice(5) : ''}</span>
                   <span>
                     <select
@@ -650,7 +865,9 @@ export default function TransactionsPage() {
             <div className="mobile-only tx-day-list">
               {byDate.map(([date, rows]) => (
                 <section key={date} className="card row-list">
-                  <div className="tx-day-header micro">{date}</div>
+                  <div className="tx-day-header micro">
+                    {date.slice(5)} {weekdayOf(date)}
+                  </div>
                   {rows.map((tx) => (
                     <div key={tx.id} className={`list-row tx-mobile-row${rowStateClass(tx)}`}>
                       <span className="tx-mobile-main">
@@ -698,6 +915,45 @@ export default function TransactionsPage() {
                 </section>
               ))}
             </div>
+
+            {/* Pagination */}
+            <section className="card span-12 tx-pager">
+              <span className="caption">
+                顯示 {paged.length} 筆 · 本月共 {filtered.length} 筆
+              </span>
+              {totalPages > 1 && (
+                <span className="tx-pager__pages">
+                  <button
+                    type="button"
+                    className="month-switch__btn"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    aria-label="上一頁"
+                  >
+                    ‹
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      className={`tx-pager__num${p === page ? ' tx-pager__num--active' : ''}`}
+                      onClick={() => setPage(p)}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="month-switch__btn"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    aria-label="下一頁"
+                  >
+                    ›
+                  </button>
+                </span>
+              )}
+            </section>
           </>
         )}
       </div>
