@@ -1,0 +1,94 @@
+{
+  "product": "Finance Tracker",
+  "color": {
+    "bg": "#F9F5F0",
+    "card": "#FFFFFF",
+    "ink": "#373737",
+    "ink70": "#6F6A63",
+    "ink60": "#8A8177",
+    "ink40": "#B9AE9F",
+    "inkMutedRow": "#A79C8E",
+    "hairline": "#E7DFD4",
+    "hairlineSoft": "#F1EAE0",
+    "barTrack": "#EFE8DE",
+    "mocha": "#B5A38F",
+    "mint": "#B6D2C1",
+    "mintBar": "#9DBFAC",
+    "mintDeep": "#5F8471",
+    "mintDeeper": "#2F4A3D",
+    "incomeText": "#47695A",
+    "mintTint": "#E9F1EC",
+    "mintBorder": "#C9DED2",
+    "mintRow": "#F3F8F4",
+    "apricot": "#F3B38C",
+    "apricotStrong": "#E89B63",
+    "apricotDeep": "#B06A38",
+    "apricotDeepest": "#6B3F1D",
+    "apricotTint": "#FAEEE3",
+    "apricotRow": "#FDF7F0",
+    "apricotBorder": "#EBC9AC",
+    "dotOrange": "#D98D55",
+    "panel": "#F5F0E8",
+    "rowHover": "#FBF8F3"
+  },
+  "chartPalette": [
+    "#B6D2C1",
+    "#B5A38F",
+    "#F3B38C",
+    "#5F8471",
+    "#E89B63",
+    "#C9DED2",
+    "#B9AE9F",
+    "#EBC9AC"
+  ],
+  "font": {
+    "ui": "'Noto Sans TC', sans-serif",
+    "mono": "'IBM Plex Mono', monospace"
+  },
+  "type": {
+    "amountXL": { "size": 32, "weight": 600, "family": "mono" },
+    "amountL": { "size": 22, "weight": 600, "family": "mono" },
+    "amountS": { "size": 14, "weight": 500, "family": "mono" },
+    "h1": { "size": 22, "weight": 700 },
+    "h2": { "size": 15, "weight": 700 },
+    "body": { "size": 13, "weight": 400 },
+    "caption": { "size": 12, "weight": 400 },
+    "micro": { "size": 11, "weight": 500, "letterSpacing": "0.08em" }
+  },
+  "space": [4, 8, 12, 16, 24, 32],
+  "radius": { "chip": 6, "badge": 8, "control": 10, "card": 12, "frameDesktop": 16, "frameMobile": 20 },
+  "border": { "hairline": "1px" },
+  "bar": {
+    "categoryHeight": 6,
+    "waterlineHeight": 10,
+    "stackHeight": 12,
+    "budgetTick": { "width": 2, "height": 12, "color": "#373737" },
+    "trackColor": "#EFE8DE"
+  },
+  "chart": {
+    "strokeWidth": 1.5,
+    "fillOpacityMax": 0.16,
+    "donut": { "thickness": [30, 48], "labelMinFrac": 0.07, "valueMinFrac": 0.11 }
+  },
+  "layout": {
+    "desktop": { "canvas": [1440, 1024], "sidebarWidth": 216, "contentPadding": [28, 32], "grid": 12, "gap": 16 },
+    "mobile": { "canvas": [390, 844], "pagePadding": [24, 20], "bottomNavHeight": 64, "fabSize": 52, "gap": 12 }
+  },
+  "shadow": { "card": "none", "fab": "0 4px 12px rgba(95,132,113,0.3)", "floating": "0 10px 30px rgba(55,55,55,0.08)" },
+  "rowStates": {
+    "income": "#F3F8F4",
+    "needsReview": "#FDF7F0",
+    "transferTextColor": "#A79C8E",
+    "hover": "#FBF8F3"
+  },
+  "navigation": {
+    "primary": ["總覽", "資產", "明細", "匯入"],
+    "management": ["待確認", "固定支出", "投資", "月報", "設定"],
+    "mobileManagementEntry": "overview-bottom-list"
+  },
+  "categories": {
+    "expense": ["生活", "交通", "娛樂", "其他", "健康", "工作", "成長"],
+    "income": ["薪資", "接案", "投資收益", "其他收入"],
+    "transfer": ["轉帳", "投資"]
+  }
+}
