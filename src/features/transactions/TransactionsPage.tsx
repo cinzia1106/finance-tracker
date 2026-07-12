@@ -160,13 +160,18 @@ export default function TransactionsPage() {
     return (duplicateKeys.get(key) ?? 0) > 1;
   }
 
-  /** Categories present in the loaded month, for the filter dropdown. */
+  /** Categories present this month, split by kind so the filter can group
+      expense vs income (each carries its own tag palette). */
   const presentCategories = useMemo(() => {
-    const names = new Set<string>();
+    const expense = new Set<string>();
+    const income = new Set<string>();
     for (const tx of transactions ?? []) {
-      if (tx.category) names.add(tx.category);
+      if (!tx.category) continue;
+      if (tx.type === 'expense') expense.add(tx.category);
+      else if (tx.type === 'income') income.add(tx.category);
     }
-    return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    const sort = (set: Set<string>) => [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    return { expense: sort(expense), income: sort(income) };
   }, [transactions]);
 
   const presentAccounts = useMemo(() => {
@@ -491,11 +496,24 @@ export default function TransactionsPage() {
           aria-label="依分類篩選"
         >
           <option value="">分類：全部</option>
-          {presentCategories.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
+          {presentCategories.expense.length > 0 && (
+            <optgroup label="支出">
+              {presentCategories.expense.map((name) => (
+                <option key={`e-${name}`} value={name}>
+                  {name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {presentCategories.income.length > 0 && (
+            <optgroup label="收入">
+              {presentCategories.income.map((name) => (
+                <option key={`i-${name}`} value={name}>
+                  {name}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
         <select
           className={`text-input tx-filter${tagFilter ? ' tx-filter--active' : ''}`}
