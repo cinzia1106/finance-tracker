@@ -2,3 +2,104 @@
 .invest-stat {
   font-size: 20px;
 }
+.invest-subtitle {
+  letter-spacing: 0;
+}
+.invest-note {
+  letter-spacing: 0;
+}
+.invest-rule {
+  line-height: 1.7;
+}
+
+/* Chart legend */
+.invest-legend {
+  display: inline-flex;
+  gap: 16px;
+}
+.invest-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--type-caption-size);
+  color: var(--color-ink-70);
+}
+.invest-legend__line {
+  width: 16px;
+  height: 0;
+  border-top-width: 1.5px;
+  border-top-style: solid;
+}
+.invest-legend__line--net {
+  border-color: var(--color-mocha);
+}
+.invest-legend__line--mv {
+  border-color: var(--color-mint-deep);
+}
+
+/* Holdings table */
+.invest-holdings-grid {
+  grid-template-columns: minmax(0, 1fr) 72px 96px 96px 64px;
+}
+.invest-stale-badge {
+  margin-left: 6px;
+  padding: 1px 8px;
+  font-size: var(--type-micro-size);
+}
+.invest-holdings-empty,
+.invest-holdings-note {
+  display: block;
+  padding-top: 8px;
+}
+
+/* Dividend timeline */
+.invest-timeline {
+  display: flex;
+  flex-direction: column;
+}
+.invest-timeline__row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: var(--border-hairline-soft);
+}
+.invest-timeline__row:last-child {
+  border-bottom: none;
+}
+.invest-timeline__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-mint);
+  border: 2px solid var(--color-mint-deep);
+  box-sizing: border-box;
+  align-self: center;
+}
+.invest-timeline__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.invest-timeline__name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.invest-timeline__amount {
+  white-space: nowrap;
+}
+
+@media (max-width: 959px) {
+  /* Drop 股數 and 快照日 on narrow screens: 標的 / 投入成本 / 市值快照 */
+  .invest-holdings-grid {
+    grid-template-columns: minmax(0, 1fr) 90px 90px;
+  }
+  .invest-holdings-grid > span:nth-child(2),
+  .invest-holdings-grid > span:nth-child(5) {
+    display: none;
+  }
+}
