@@ -23,6 +23,14 @@ const ACCOUNT_TYPES: Array<{ value: AccountType; label: string }> = [
   { value: 'virtual', label: '投資／虛擬' },
 ];
 
+type MgmtTab = 'add' | 'edit' | 'balance' | 'debt';
+const MGMT_TABS: Array<{ value: MgmtTab; label: string }> = [
+  { value: 'add', label: '新增帳戶' },
+  { value: 'edit', label: '編輯帳戶' },
+  { value: 'balance', label: '更新餘額快照' },
+  { value: 'debt', label: '更新負債快照' },
+];
+
 const CURRENCIES = ['TWD', 'USD', 'JPY', 'EUR', 'CNY', 'HKD'] as const;
 const DEFAULT_CURRENCY = 'TWD';
 const CURRENCY_NOTE_RE = /\[currency:([A-Z]{3})\]/i;
@@ -115,6 +123,7 @@ export default function AssetsPage() {
   const [data, setData] = useState<AssetOverview | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [debtSnapshots, setDebtSnapshots] = useState<LiabilitySnapshot[]>([]);
+  const [mgmtTab, setMgmtTab] = useState<MgmtTab>('add');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -358,8 +367,9 @@ export default function AssetsPage() {
       remainingInstallments: parsed.remaining,
       startDate: parsed.start || todayDate,
     });
+    setMgmtTab('debt');
     setMessage(`已載入「${name}」，於下方「更新負債快照」修改後按儲存即更新。`);
-    document.getElementById('debt-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('mgmt-forms')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   if (!data) {
@@ -726,13 +736,24 @@ export default function AssetsPage() {
           </div>
         </section>
 
-        {/* 月結更新 */}
+        {/* 月結更新 — four forms merged into one tabbed card */}
         <div className="span-12 assets__section-label micro">月結更新</div>
 
-        <section className="card span-4">
-          <div className="card__header">
-            <h2 className="h2">新增帳戶</h2>
+        <section className="card span-12" id="mgmt-forms">
+          <div className="assets__mgmt-tabs">
+            {MGMT_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                className={`assets__mgmt-tab${mgmtTab === tab.value ? ' assets__mgmt-tab--active' : ''}`}
+                onClick={() => setMgmtTab(tab.value)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
+
+          {mgmtTab === 'add' && (
           <form onSubmit={createAccount} className="form-grid">
             <label className="form-field form-field--wide">
               <span className="micro">名稱</span>
@@ -792,12 +813,9 @@ export default function AssetsPage() {
               </button>
             </div>
           </form>
-        </section>
+          )}
 
-        <section className="card span-4">
-          <div className="card__header">
-            <h2 className="h2">編輯帳戶</h2>
-          </div>
+          {mgmtTab === 'edit' && (
           <form onSubmit={updateAccount} className="form-grid">
             <label className="form-field form-field--wide">
               <span className="micro">選擇帳戶</span>
@@ -898,12 +916,9 @@ export default function AssetsPage() {
               </button>
             </div>
           </form>
-        </section>
+          )}
 
-        <section className="card span-4">
-          <div className="card__header">
-            <h2 className="h2">更新餘額快照</h2>
-          </div>
+          {mgmtTab === 'balance' && (
           <form onSubmit={saveAssetSnapshot} className="form-grid">
             {assetAccounts.length === 0 && (
               <div className="caption assets__empty-note form-field--wide">
@@ -996,12 +1011,9 @@ export default function AssetsPage() {
               </button>
             </div>
           </form>
-        </section>
+          )}
 
-        <section className="card span-4" id="debt-form">
-          <div className="card__header">
-            <h2 className="h2">更新負債快照</h2>
-          </div>
+          {mgmtTab === 'debt' && (
           <form onSubmit={saveDebtSnapshot} className="form-grid">
             {creditAccounts.length === 0 && (
               <div className="caption assets__empty-note form-field--wide">
@@ -1106,6 +1118,7 @@ export default function AssetsPage() {
               </button>
             </div>
           </form>
+          )}
         </section>
       </div>
     </>
