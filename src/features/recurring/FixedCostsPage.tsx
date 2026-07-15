@@ -465,164 +465,127 @@ export default function FixedCostsPage() {
     );
   }
 
-  function renderBadge(item: RecurringExpense, paid: boolean) {
-    return paid ? (
-      <button
-        type="button"
-        className="badge badge--confirmed dashboard__fixed-badge"
-        disabled={busyId === item.id}
-        title="點擊改為待繳"
-        onClick={() => void clearCurrentPaid(item)}
-      >
-        <span className="badge__dot" />
-        已繳費
-      </button>
-    ) : (
-      <button
-        type="button"
-        className="badge badge--review dashboard__fixed-badge"
-        disabled={busyId === item.id}
-        title="點擊以今天記錄繳費"
-        onClick={() => void recordPayment(item, today())}
-      >
-        <span className="badge__dot" />
-        待繳
-      </button>
-    );
-  }
-
-  function renderActions(
-    item: RecurringExpense,
-    itemId: string,
-    payments: string[],
-    paid: boolean,
-  ) {
-    const historyOpen = historyOpenId === itemId;
-    if (deleteConfirmId === item.id) {
-      return (
-        <span className="fc-c-actions fc-actions">
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm dashboard__fixed-danger"
-            disabled={busyId === item.id}
-            onClick={() => void removeItem(item)}
-          >
-            確認刪除
-          </button>
+  /** Expandable panel under a row — payment history, plan changes, and all
+      row actions (mark paid / edit / delete) live here so the row itself
+      stays button-free and clean, matching the reference design. Clicking a
+      row toggles this open. */
+  function renderPanel(item: RecurringExpense, paid: boolean) {
+    const payments = recurringPaymentDates(item);
+    const planHistory = recurringPlanChanges(item);
+    return (
+      <div className="fc-panel" onClick={(event) => event.stopPropagation()}>
+        <div className="fc-panel__actions">
+          {paid ? (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              disabled={busyId === item.id}
+              onClick={() => void clearCurrentPaid(item)}
+            >
+              改為待繳
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              disabled={busyId === item.id}
+              onClick={() => void recordPayment(item, today())}
+            >
+              標記今日已繳
+            </button>
+          )}
           <button
             type="button"
             className="btn btn--secondary btn--sm"
-            onClick={() => setDeleteConfirmId(null)}
+            onClick={() => startEdit(item)}
           >
-            取消
+            編輯
           </button>
-        </span>
-      );
-    }
-    return (
-      <span className="fc-c-actions fc-actions">
-        {renderBadge(item, paid)}
-        <button
-          type="button"
-          className="btn btn--secondary btn--sm"
-          onClick={() => {
-            setHistoryOpenId(historyOpen ? null : itemId);
-            setNewPayDate(today());
-          }}
-          aria-expanded={historyOpen}
-        >
-          紀錄{payments.length > 0 ? ` ${payments.length}` : ''}
-        </button>
-        <button
-          type="button"
-          className="btn btn--secondary btn--sm"
-          onClick={() => startEdit(item)}
-        >
-          編輯
-        </button>
-        <button
-          type="button"
-          className="dashboard__fixed-delete"
-          aria-label={`刪除 ${item.name}`}
-          title="刪除"
-          onClick={() => setDeleteConfirmId(item.id ?? null)}
-        >
-          ✕
-        </button>
-      </span>
-    );
-  }
+          {deleteConfirmId === item.id ? (
+            <>
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm dashboard__fixed-danger"
+                disabled={busyId === item.id}
+                onClick={() => void removeItem(item)}
+              >
+                確認刪除
+              </button>
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => setDeleteConfirmId(null)}
+              >
+                取消
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm dashboard__fixed-danger"
+              onClick={() => setDeleteConfirmId(item.id ?? null)}
+            >
+              刪除
+            </button>
+          )}
+        </div>
 
-  /** Expandable payment-history panel + inline edit form (spans all
-      columns via grid-column: 1 / -1). Shared by every row variant. */
-  function renderExpandable(item: RecurringExpense, itemId: string) {
-    const payments = recurringPaymentDates(item);
-    const planHistory = recurringPlanChanges(item);
-    const historyOpen = historyOpenId === itemId;
-    return (
-      <>
-        {historyOpen && (
-          <div className="fc-history">
-            <div className="fc-history__head">
-              <span className="micro">繳費紀錄</span>
-              <span className="fc-history__add">
-                <input
-                  className="text-input mono fc-history__date"
-                  type="date"
-                  value={newPayDate}
-                  onChange={(event) => setNewPayDate(event.target.value)}
-                />
-                <button
-                  type="button"
-                  className="btn btn--primary btn--sm"
-                  disabled={busyId === item.id || !newPayDate}
-                  onClick={() => void recordPayment(item, newPayDate)}
-                >
-                  新增紀錄
-                </button>
-              </span>
+        <div className="fc-history__head">
+          <span className="micro">繳費紀錄</span>
+          <span className="fc-history__add">
+            <input
+              className="text-input mono fc-history__date"
+              type="date"
+              value={newPayDate}
+              onChange={(event) => setNewPayDate(event.target.value)}
+            />
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              disabled={busyId === item.id || !newPayDate}
+              onClick={() => void recordPayment(item, newPayDate)}
+            >
+              新增紀錄
+            </button>
+          </span>
+        </div>
+        {payments.length === 0 ? (
+          <span className="caption">尚無繳費紀錄。</span>
+        ) : (
+          payments.map((date, index) => (
+            <div key={`${date}-${index}`} className="fc-history__row">
+              <input
+                className="text-input mono fc-history__date"
+                type="date"
+                value={date}
+                disabled={busyId === item.id}
+                onChange={(event) => {
+                  const next = [...payments];
+                  next[index] = event.target.value;
+                  void savePayments(item, next);
+                }}
+              />
+              {index === 0 && <span className="micro fc-history__latest">最新</span>}
+              <button
+                type="button"
+                className="dashboard__fixed-delete"
+                aria-label={`刪除繳費紀錄 ${date}`}
+                title="刪除此筆紀錄"
+                disabled={busyId === item.id}
+                onClick={() =>
+                  void savePayments(
+                    item,
+                    payments.filter((_, i) => i !== index),
+                  )
+                }
+              >
+                ✕
+              </button>
             </div>
-            {payments.length === 0 ? (
-              <span className="caption">尚無繳費紀錄。</span>
-            ) : (
-              payments.map((date, index) => (
-                <div key={`${date}-${index}`} className="fc-history__row">
-                  <input
-                    className="text-input mono fc-history__date"
-                    type="date"
-                    value={date}
-                    disabled={busyId === item.id}
-                    onChange={(event) => {
-                      const next = [...payments];
-                      next[index] = event.target.value;
-                      void savePayments(item, next);
-                    }}
-                  />
-                  {index === 0 && <span className="micro fc-history__latest">最新</span>}
-                  <button
-                    type="button"
-                    className="dashboard__fixed-delete"
-                    aria-label={`刪除繳費紀錄 ${date}`}
-                    title="刪除此筆紀錄"
-                    disabled={busyId === item.id}
-                    onClick={() =>
-                      void savePayments(
-                        item,
-                        payments.filter((_, i) => i !== index),
-                      )
-                    }
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))
-            )}
-            {planHistory.length > 0 && (
-              <div className="fc-history__plans caption">
-                方案調整：{planHistory.join('、')}
-              </div>
-            )}
-          </div>
+          ))
+        )}
+        {planHistory.length > 0 && (
+          <div className="fc-history__plans caption">方案調整：{planHistory.join('、')}</div>
         )}
 
         {editId === item.id && (
@@ -635,41 +598,76 @@ export default function FixedCostsPage() {
             )}
           </form>
         )}
-      </>
+      </div>
     );
   }
 
-  /** Standard (health / other) and subscription rows share this renderer.
-      Subscription rows add a 上次扣款 column instead of leaning on the meta. */
-  function renderRow(row: { item: RecurringExpense; paid: boolean }, variant: 'std' | 'sub') {
+  function statusCell(item: RecurringExpense, paid: boolean) {
+    if (paid) {
+      const last = recurringPaymentDates(item)[0] ?? item.lastPaid ?? null;
+      return <span className="fc-c-status fc-status--paid">已扣款 {monthDay(last)}</span>;
+    }
+    if (isMissingThisMonth(item, monthKey, monthTransactions)) {
+      return <span className="fc-c-status fc-status--miss">缺漏</span>;
+    }
+    return <span className="fc-c-status fc-status--due">待繳</span>;
+  }
+
+  /** A clickable row (summary grid) plus its expandable panel. std/sub/other
+      variants differ only in which cells the summary shows. */
+  function renderItem(row: { item: RecurringExpense; paid: boolean }, variant: 'std' | 'sub') {
     const { item, paid } = row;
     const itemId = item.id ?? item.name;
-    const payments = recurringPaymentDates(item);
-    const lastPaid = payments[0] ?? item.lastPaid ?? null;
+    const open = historyOpenId === itemId;
+    const currency = recurringCurrency(item) !== 'TWD' ? `${recurringCurrency(item)} ` : '';
+    const lastPaid = recurringPaymentDates(item)[0] ?? item.lastPaid ?? null;
+    const toggle = () => {
+      setHistoryOpenId(open ? null : itemId);
+      setNewPayDate(today());
+    };
     return (
-      <div key={itemId} className={`fc-row fc-row--${variant}`}>
-        <span className="fc-c-name cell-ellipsis" title={item.name}>
-          {item.name}
-          <span className="micro dashboard__fixed-meta">
-            {' '}
-            {item.category}
-            {recurringTags(item)[0] ? ` · ${recurringTags(item)[0]}` : ''}
-            {` · ${cycleLabel(item.cycle)}`}
-            {fixedDueText(item) ? ` · ${fixedDueText(item)}` : ''}
+      <div key={itemId} className="fc-item">
+        <div
+          className={`fc-row fc-row--${variant}${open ? ' fc-row--open' : ''}`}
+          role="button"
+          tabIndex={0}
+          onClick={toggle}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              toggle();
+            }
+          }}
+        >
+          <span className="fc-c-name cell-ellipsis" title={item.name}>
+            {item.name}
+            <span className="micro dashboard__fixed-meta">
+              {' '}
+              {item.category}
+              {recurringTags(item)[0] ? ` · ${recurringTags(item)[0]}` : ''}
+              {fixedDueText(item) ? ` · ${fixedDueText(item)}` : ''}
+            </span>
           </span>
-        </span>
-        <span className="fc-c-amount amount-s">
-          {recurringCurrency(item) !== 'TWD' ? `${recurringCurrency(item)} ` : ''}
-          {formatPlain(itemChargeAmount(item))}
-        </span>
-        {variant === 'sub' && (
-          <span className="fc-c-last micro tx-muted">
-            <span className="fc-c-lbl">上次扣款 </span>
-            {monthDay(lastPaid)}
+          {variant === 'std' && (
+            <span className="fc-c-cycle micro tx-muted">
+              <span className="fc-c-lbl">週期 </span>
+              {cycleLabel(item.cycle)}
+            </span>
+          )}
+          <span className="fc-c-amount amount-s">
+            <span className="fc-c-lbl">金額 </span>
+            {currency}
+            {formatPlain(itemChargeAmount(item))}
           </span>
-        )}
-        {renderActions(item, itemId, payments, paid)}
-        {renderExpandable(item, itemId)}
+          {variant === 'std' && statusCell(item, paid)}
+          {variant === 'sub' && (
+            <span className="fc-c-last micro tx-muted">
+              <span className="fc-c-lbl">上次扣款 </span>
+              {monthDay(lastPaid)}
+            </span>
+          )}
+        </div>
+        {open && renderPanel(item, paid)}
       </div>
     );
   }
@@ -678,35 +676,52 @@ export default function FixedCostsPage() {
   function renderInstallmentRow(row: { item: RecurringExpense; paid: boolean }) {
     const { item, paid } = row;
     const itemId = item.id ?? item.name;
-    const payments = recurringPaymentDates(item);
+    const open = historyOpenId === itemId;
+    const currency = recurringCurrency(item) !== 'TWD' ? `${recurringCurrency(item)} ` : '';
     const total = installmentTotal(item);
     const remaining = installmentRemaining(item);
+    const toggle = () => {
+      setHistoryOpenId(open ? null : itemId);
+      setNewPayDate(today());
+    };
     return (
-      <div key={itemId} className="fc-row fc-row--inst">
-        <span className="fc-c-name cell-ellipsis" title={item.name}>
-          {item.name}
-          <span className="micro dashboard__fixed-meta">
-            {' '}
-            {item.category}
-            {recurringTags(item)[0] ? ` · ${recurringTags(item)[0]}` : ''}
+      <div key={itemId} className="fc-item">
+        <div
+          className={`fc-row fc-row--inst${open ? ' fc-row--open' : ''}`}
+          role="button"
+          tabIndex={0}
+          onClick={toggle}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              toggle();
+            }
+          }}
+        >
+          <span className="fc-c-name cell-ellipsis" title={item.name}>
+            {item.name}
+            <span className="micro dashboard__fixed-meta">
+              {' '}
+              {item.category}
+              {recurringTags(item)[0] ? ` · ${recurringTags(item)[0]}` : ''}
+            </span>
           </span>
-        </span>
-        <span className="fc-c-remain">
-          <span className="fc-c-lbl">剩餘 </span>
-          {remaining != null ? remaining : '—'}
-          <span className="tx-muted"> / {total} 期</span>
-        </span>
-        <span className="fc-c-monthly amount-s">
-          <span className="fc-c-lbl">月付 </span>
-          {recurringCurrency(item) !== 'TWD' ? `${recurringCurrency(item)} ` : ''}
-          {formatPlain(itemChargeAmount(item))}
-        </span>
-        <span className="fc-c-next micro tx-muted">
-          <span className="fc-c-lbl">下次扣款 </span>
-          {monthDay(item.nextDue ?? null)}
-        </span>
-        {renderActions(item, itemId, payments, paid)}
-        {renderExpandable(item, itemId)}
+          <span className="fc-c-remain">
+            <span className="fc-c-lbl">剩餘 </span>
+            {remaining != null ? remaining : '—'}
+            <span className="tx-muted"> / {total} 期</span>
+          </span>
+          <span className="fc-c-monthly amount-s">
+            <span className="fc-c-lbl">月付 </span>
+            {currency}
+            {formatPlain(itemChargeAmount(item))}
+          </span>
+          <span className="fc-c-next micro tx-muted">
+            <span className="fc-c-lbl">下次扣款 </span>
+            {monthDay(item.nextDue ?? null)}
+          </span>
+        </div>
+        {open && renderPanel(item, paid)}
       </div>
     );
   }
@@ -719,7 +734,6 @@ export default function FixedCostsPage() {
           <span className="fc-c-remain">剩餘</span>
           <span className="fc-c-monthly">月付</span>
           <span className="fc-c-next">下次扣款</span>
-          <span className="fc-c-actions" />
         </div>
       );
     }
@@ -729,15 +743,15 @@ export default function FixedCostsPage() {
           <span className="fc-c-name">服務</span>
           <span className="fc-c-amount">金額</span>
           <span className="fc-c-last">上次扣款</span>
-          <span className="fc-c-actions" />
         </div>
       );
     }
     return (
       <div className="fc-row fc-row--std fc-row--head">
         <span className="fc-c-name">項目</span>
+        <span className="fc-c-cycle">週期</span>
         <span className="fc-c-amount">金額</span>
-        <span className="fc-c-actions">狀態</span>
+        <span className="fc-c-status">狀態</span>
       </div>
     );
   }
@@ -840,84 +854,91 @@ export default function FixedCostsPage() {
             </span>
           </section>
         ) : (
-          <>
-            {/* 健康 */}
-            {healthRows.length > 0 && (
-              <section className="card span-12">
-                <div className="card__header">
-                  <h2 className="h2">健康</h2>
-                  <span className="micro fc-group-note">
-                    月承諾 {formatPlain(twdMonthlyEquiv(healthRows))}
-                  </span>
-                </div>
-                <div className="fc-sec">
-                  {renderSectionHead('std')}
-                  {healthRows.map((row) => renderRow(row, 'std'))}
-                </div>
-              </section>
-            )}
+          <div className="span-12 fc-columns">
+            {/* Left column: 健康 / 分期 / 其他固定承諾 */}
+            <div className="fc-col">
+              {healthRows.length > 0 && (
+                <section className="card">
+                  <div className="card__header">
+                    <h2 className="h2">健康</h2>
+                    <span className="micro fc-group-note">
+                      月承諾 {formatPlain(twdMonthlyEquiv(healthRows))}
+                    </span>
+                  </div>
+                  <div className="fc-sec">
+                    {renderSectionHead('std')}
+                    {healthRows.map((row) => renderItem(row, 'std'))}
+                  </div>
+                </section>
+              )}
 
-            {/* 分期 */}
-            {installmentRows.length > 0 && (
-              <section className="card span-12">
+              {/* 分期 — always shown (機車 / 電腦 這類分期購買) */}
+              <section className="card">
                 <div className="card__header">
                   <h2 className="h2">分期</h2>
                   <span className="micro fc-group-note">
                     月付合計 {formatPlain(installmentTotalMonthly)}
                   </span>
                 </div>
-                <div className="fc-sec">
-                  {renderSectionHead('inst')}
-                  {installmentRows.map((row) => renderInstallmentRow(row))}
-                </div>
-                <div className="micro fc-group-note" style={{ marginTop: 8 }}>
-                  剩餘期數＝分期期數扣除已記錄繳費筆數；本金入資產頁負債，此處僅追蹤月付現金流。
-                </div>
-              </section>
-            )}
-
-            {/* 訂閱（工作軟體＋影音） */}
-            {subRows.length > 0 && (
-              <section className="card span-12">
-                <div className="card__header">
-                  <h2 className="h2">訂閱</h2>
-                  <span className="micro fc-group-note">
-                    月當量 {formatPlain(subsTotal)} · 工作軟體與影音
+                {installmentRows.length > 0 ? (
+                  <>
+                    <div className="fc-sec">
+                      {renderSectionHead('inst')}
+                      {installmentRows.map((row) => renderInstallmentRow(row))}
+                    </div>
+                    <div className="micro fc-group-note" style={{ marginTop: 8 }}>
+                      剩餘期數＝分期期數扣除已記錄繳費筆數；本金入資產頁負債，此處僅追蹤月付現金流。
+                    </div>
+                  </>
+                ) : (
+                  <span className="caption dashboard__fixed-empty">
+                    尚無分期項目。編輯項目並填入「分期期數」即可加入（例：機車、筆電分期）。
                   </span>
-                </div>
-                <div className="fc-sec">
-                  {renderSectionHead('sub')}
-                  {subRows.map((row) => renderRow(row, 'sub'))}
+                )}
+              </section>
+
+              {otherRows.length > 0 && (
+                <section className="card">
+                  <div className="card__header">
+                    <h2 className="h2">其他固定承諾</h2>
+                    <span className="micro fc-group-note">
+                      月承諾 {formatPlain(twdMonthlyEquiv(otherRows))}
+                    </span>
+                  </div>
+                  <div className="fc-sec">
+                    {renderSectionHead('std')}
+                    {otherRows.map((row) => renderItem(row, 'std'))}
+                  </div>
+                </section>
+              )}
+            </div>
+
+            {/* Right column: 訂閱（工作軟體＋影音） */}
+            <div className="fc-col">
+              {subRows.length > 0 && (
+                <section className="card">
+                  <div className="card__header">
+                    <h2 className="h2">訂閱</h2>
+                    <span className="micro fc-group-note">
+                      月當量 {formatPlain(subsTotal)} · 工作軟體與影音
+                    </span>
+                  </div>
+                  <div className="fc-sec">
+                    {renderSectionHead('sub')}
+                    {subRows.map((row) => renderItem(row, 'sub'))}
+                  </div>
+                </section>
+              )}
+              <section className="card fc-rule-card">
+                <div className="caption" style={{ lineHeight: 1.7 }}>
+                  規則：工作與娛樂分類歸「訂閱」，帶分期期數的項目歸「分期」，
+                  健康自成一區，其餘為「其他固定承諾」。點一列即可展開繳費紀錄與編輯。
+                  缺漏＝月繳項目已過扣款日仍未出現對應交易。
                 </div>
               </section>
-            )}
-
-            {/* 其他固定承諾 */}
-            {otherRows.length > 0 && (
-              <section className="card span-12">
-                <div className="card__header">
-                  <h2 className="h2">其他固定承諾</h2>
-                  <span className="micro fc-group-note">
-                    月承諾 {formatPlain(twdMonthlyEquiv(otherRows))}
-                  </span>
-                </div>
-                <div className="fc-sec">
-                  {renderSectionHead('std')}
-                  {otherRows.map((row) => renderRow(row, 'std'))}
-                </div>
-              </section>
-            )}
-          </>
-        )}
-
-        <section className="card span-12">
-          <div className="caption" style={{ lineHeight: 1.7 }}>
-            規則：年繳／半年繳以月當量計入每月承諾；工作與娛樂分類歸「訂閱」，
-            帶分期期數的項目歸「分期」，健康自成一區，其餘為「其他固定承諾」。
-            下次扣款日自動推算——月繳依扣款日、年繳／半年繳依最後繳費日加一個週期。
-            缺漏＝月繳項目已過扣款日仍未出現對應交易；「補記」記錄一筆繳費、「本月暫停」略過本月偵測。
+            </div>
           </div>
-        </section>
+        )}
       </div>
     </>
   );

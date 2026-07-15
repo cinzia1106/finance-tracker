@@ -290,54 +290,106 @@
   grid-template-columns: minmax(0, 1fr) 96px auto;
 }
 
-/* Fixed-costs page — semantic section tables (health / installment /
-   subscription / other). Each row is its own grid so the expandable
-   history panel can span every column via grid-column: 1 / -1. */
+/* Fixed-costs page — two-column masonry of semantic section cards. */
+.fc-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--layout-grid-gap, 16px);
+  align-items: start;
+}
+.fc-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-grid-gap, 16px);
+  min-width: 0;
+}
+.fc-rule-card {
+  background: transparent;
+}
+
+/* Section tables. Rows are button-free and clickable — the whole summary
+   toggles an expandable panel that holds history + actions. */
 .fc-sec {
   display: flex;
   flex-direction: column;
 }
+.fc-item {
+  border-bottom: var(--border-hairline-soft);
+}
+.fc-item:last-child {
+  border-bottom: none;
+}
 .fc-row {
   display: grid;
   align-items: center;
-  gap: 8px 12px;
-  padding: 8px 0;
-  border-bottom: var(--border-hairline-soft);
+  gap: 4px 12px;
+  padding: 9px 8px;
+  margin: 0 -8px;
+  border-radius: var(--radius-badge);
   font-size: 13px;
+  cursor: pointer;
 }
-.fc-row:last-child {
-  border-bottom: none;
+.fc-row:hover {
+  background: var(--color-row-hover);
+}
+.fc-row--open {
+  background: var(--color-row-hover);
 }
 .fc-row--head {
-  padding: 0 0 6px 0;
+  cursor: default;
+  padding: 0 8px 6px 8px;
   border-bottom: var(--border-hairline);
   font-size: 11px;
   letter-spacing: 0.06em;
   color: var(--color-ink-40);
 }
+.fc-row--head:hover {
+  background: transparent;
+}
 .fc-row--std {
-  grid-template-columns: minmax(0, 1fr) 110px auto;
-  grid-template-areas: 'name amount actions';
+  grid-template-columns: minmax(0, 1fr) 64px 96px 96px;
+  grid-template-areas: 'name cycle amount status';
 }
 .fc-row--sub {
-  grid-template-columns: minmax(0, 1fr) 100px 96px auto;
-  grid-template-areas: 'name amount last actions';
+  grid-template-columns: minmax(0, 1fr) 100px 88px;
+  grid-template-areas: 'name amount last';
 }
 .fc-row--inst {
-  grid-template-columns: minmax(0, 1fr) 72px 96px 96px auto;
-  grid-template-areas: 'name remain monthly next actions';
+  grid-template-columns: minmax(0, 1fr) 72px 96px 88px;
+  grid-template-areas: 'name remain monthly next';
 }
 .fc-c-name {
   grid-area: name;
   min-width: 0;
+}
+.fc-c-cycle {
+  grid-area: cycle;
+  white-space: nowrap;
 }
 .fc-c-amount {
   grid-area: amount;
   text-align: right;
   white-space: nowrap;
 }
+.fc-c-status {
+  grid-area: status;
+  text-align: right;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+.fc-status--paid {
+  color: var(--color-mint-deep);
+}
+.fc-status--miss {
+  color: var(--color-apricot-deep);
+  font-weight: 500;
+}
+.fc-status--due {
+  color: var(--color-ink-40);
+}
 .fc-c-last {
   grid-area: last;
+  text-align: right;
   white-space: nowrap;
 }
 .fc-c-remain {
@@ -351,18 +403,8 @@
 }
 .fc-c-next {
   grid-area: next;
+  text-align: right;
   white-space: nowrap;
-}
-.fc-c-actions {
-  grid-area: actions;
-  justify-self: end;
-}
-.fc-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 /* Inline field labels — hidden on desktop (the header row names columns),
    shown on mobile where each row reflows and the header is dropped. */
@@ -371,7 +413,28 @@
   color: var(--color-ink-40);
 }
 
+/* Expandable panel under a clicked row */
+.fc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin: 0 0 8px 0;
+  background: var(--color-panel);
+  border-radius: var(--radius-badge);
+  cursor: default;
+}
+.fc-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 959px) {
+  .fc-columns {
+    grid-template-columns: 1fr;
+  }
   .fc-row--head {
     display: none;
   }
@@ -379,35 +442,31 @@
     display: inline;
   }
   .fc-row--std {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 1fr auto;
     grid-template-areas:
       'name amount'
-      'actions actions';
+      'cycle status';
   }
   .fc-row--sub {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 1fr auto;
     grid-template-areas:
       'name amount'
-      'last last'
-      'actions actions';
+      'last last';
   }
   .fc-row--inst {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
       'name name'
       'remain monthly'
-      'next next'
-      'actions actions';
+      'next next';
   }
+  .fc-c-cycle,
   .fc-c-amount,
-  .fc-c-monthly {
+  .fc-c-status,
+  .fc-c-last,
+  .fc-c-monthly,
+  .fc-c-next {
     text-align: left;
-  }
-  .fc-c-actions {
-    justify-self: start;
-  }
-  .fc-actions {
-    justify-content: flex-start;
   }
 }
 
