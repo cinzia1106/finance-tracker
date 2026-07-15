@@ -124,6 +124,13 @@
   gap: 6px;
 }
 
+/* Liability row — amount plus an edit action that prefills the debt form */
+.assets__liability-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .assets__safeline-rows {
   display: flex;
   flex-direction: column;

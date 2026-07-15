@@ -5,7 +5,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { AssetOverview } from '../../data/adapter';
 import { useAdapter } from '../../data/AdapterContext';
-import type { Account, AccountType } from '../../types/models';
+import type { Account, AccountType, LiabilitySnapshot } from '../../types/models';
 import { TrendLine, WaterlineBar } from '../../components/ui';
 import {
   formatCurrency,
@@ -63,6 +63,19 @@ function monthsBetween(start: string, end: string) {
   return endDate.getDate() >= startDate.getDate() ? monthDiff : monthDiff - 1;
 }
 
+/** Recover the editable fields from a debt snapshot's note, which
+    saveDebtSnapshot writes as `total=…; installments=…; start=…; paid=…;
+    remaining_installments=…`. */
+function parseDebtNote(note: string | undefined) {
+  const pick = (re: RegExp) => note?.match(re)?.[1] ?? '';
+  return {
+    total: pick(/total=(\d+)/),
+    installments: pick(/installments=(\d+)/),
+    start: pick(/start=([\d-]+)/),
+    remaining: pick(/remaining_installments=(\d+)/),
+  };
+}
+
 function calculateDebtSchedule(input: {
   totalAmount: string;
   installments: string;
@@ -101,6 +114,7 @@ export default function AssetsPage() {
   const adapter = useAdapter();
   const [data, setData] = useState<AssetOverview | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [debtSnapshots, setDebtSnapshots] = useState<LiabilitySnapshot[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -139,12 +153,14 @@ export default function AssetsPage() {
   async function load() {
     setLoadError(null);
     try {
-      const [overview, accountRows] = await Promise.all([
+      const [overview, accountRows, debtRows] = await Promise.all([
         adapter.getAssetOverview(),
         adapter.listAccounts?.() ?? Promise.resolve([]),
+        adapter.listDebtSnapshots?.() ?? Promise.resolve([]),
       ]);
       setData(overview);
       setAccounts(accountRows);
+      setDebtSnapshots(debtRows);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : '無法載入資產資料。');
     }
@@ -152,11 +168,16 @@ export default function AssetsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([adapter.getAssetOverview(), adapter.listAccounts?.() ?? Promise.resolve([])])
-      .then(([overview, accountRows]) => {
+    Promise.all([
+      adapter.getAssetOverview(),
+      adapter.listAccounts?.() ?? Promise.resolve([]),
+      adapter.listDebtSnapshots?.() ?? Promise.resolve([]),
+    ])
+      .then(([overview, accountRows, debtRows]) => {
         if (!cancelled) {
           setData(overview);
           setAccounts(accountRows);
+          setDebtSnapshots(debtRows);
           setLoadError(null);
         }
       })
@@ -164,6 +185,7 @@ export default function AssetsPage() {
         if (!cancelled) {
           setData(null);
           setAccounts([]);
+          setDebtSnapshots([]);
           setLoadError(error instanceof Error ? error.message : '無法載入資產資料。');
         }
       });
@@ -313,6 +335,31 @@ export default function AssetsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  /** Load a liability's latest snapshot into the debt form. Saving writes a
+      corrected snapshot that supersedes the old one (snapshot-ledger edit). */
+  function editLiability(name: string) {
+    const latest = debtSnapshots
+      .filter((snapshot) => snapshot.name === name)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (!latest) {
+      setMessage('找不到可編輯的負債快照。');
+      return;
+    }
+    const parsed = parseDebtNote(latest.note);
+    const todayDate = new Date().toISOString().slice(0, 10);
+    setDebtForm({
+      accountId: latest.accountId ?? '',
+      name: latest.name,
+      date: todayDate,
+      totalAmount: parsed.total || String(latest.remainingBalance),
+      installments: parsed.installments,
+      remainingInstallments: parsed.remaining,
+      startDate: parsed.start || todayDate,
+    });
+    setMessage(`已載入「${name}」，於下方「更新負債快照」修改後按儲存即更新。`);
+    document.getElementById('debt-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   if (!data) {
@@ -597,7 +644,18 @@ export default function AssetsPage() {
                     <span className="micro assets__date-note"> {liability.detail}</span>
                   )}
                 </span>
-                <span className="amount-s liability">{formatLiability(liability.remaining)}</span>
+                <span className="assets__liability-right">
+                  <span className="amount-s liability">{formatLiability(liability.remaining)}</span>
+                  {adapter.createDebtSnapshot && (
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => editLiability(liability.name)}
+                    >
+                      編輯
+                    </button>
+                  )}
+                </span>
               </div>
             ))}
           </div>
@@ -940,7 +998,7 @@ export default function AssetsPage() {
           </form>
         </section>
 
-        <section className="card span-4">
+        <section className="card span-4" id="debt-form">
           <div className="card__header">
             <h2 className="h2">更新負債快照</h2>
           </div>
