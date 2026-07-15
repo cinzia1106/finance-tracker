@@ -253,22 +253,30 @@ function normalizeFixedText(value: string | undefined | null) {
   return (value ?? '').toLowerCase().replace(/\s+/g, '');
 }
 
-export function recurringPaidByTransaction(item: RecurringExpense, transactions: Transaction[]) {
+export function recurringMatchesTransaction(item: RecurringExpense, tx: Transaction) {
   const itemName = normalizeFixedText(item.name);
   const amount = itemChargeAmount(item);
   const itemTag = recurringTags(item)[0];
-  return transactions.some((tx) => {
-    if (tx.type !== 'expense' || tx.amount <= 0) return false;
-    const amountMatches = amount > 0 && Math.abs(tx.amount - amount) <= 1;
-    const categoryMatches = Boolean(item.category) && tx.category === item.category;
-    const tagMatches = itemTag ? tx.tags.includes(itemTag) : false;
-    const haystack = normalizeFixedText(`${tx.note} ${tx.category} ${tx.account} ${tx.tags.join(' ')}`);
-    const textMatches = itemName.length >= 2 && haystack.includes(itemName);
-    return (
-      (amountMatches && (categoryMatches || tagMatches || textMatches)) ||
-      (textMatches && (categoryMatches || tagMatches))
-    );
-  });
+  if (tx.type !== 'expense' || tx.amount <= 0) return false;
+  const amountMatches = amount > 0 && Math.abs(tx.amount - amount) <= 1;
+  const categoryMatches = Boolean(item.category) && tx.category === item.category;
+  const tagMatches = itemTag ? tx.tags.includes(itemTag) : false;
+  const haystack = normalizeFixedText(`${tx.note} ${tx.category} ${tx.account} ${tx.tags.join(' ')}`);
+  const textMatches = itemName.length >= 2 && haystack.includes(itemName);
+  return (
+    (amountMatches && (categoryMatches || tagMatches || textMatches)) ||
+    (textMatches && (categoryMatches || tagMatches))
+  );
+}
+
+export function recurringTransactionHistory(item: RecurringExpense, transactions: Transaction[]) {
+  return transactions
+    .filter((tx) => recurringMatchesTransaction(item, tx))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export function recurringPaidByTransaction(item: RecurringExpense, transactions: Transaction[]) {
+  return recurringTransactionHistory(item, transactions).length > 0;
 }
 
 export function isPaidThisMonth(

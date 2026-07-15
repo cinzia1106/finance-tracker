@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAdapter } from '../../data/AdapterContext';
 import { tagsForCategory } from '../../data/categoryDefinitions';
+import { reconcileDebtSnapshot } from '../../data/derivedValues';
 import { useAppOutletContext } from '../../layout/AppLayout';
 import { formatCurrency, formatPlain } from '../../lib/format';
-import type { RecurringExpense, Transaction } from '../../types/models';
+import type { LiabilitySnapshot, RecurringExpense, Transaction } from '../../types/models';
 import {
   CURRENCY_OPTIONS,
   CYCLE_OPTIONS,
@@ -32,6 +33,7 @@ import {
   recurringPlainNote,
   recurringPlanChanges,
   recurringTags,
+  recurringTransactionHistory,
 } from './recurringShared';
 
 function today() {
@@ -44,6 +46,73 @@ function monthDay(date: string | null) {
   return match ? `${Number(match[1])}/${Number(match[2])}` : date;
 }
 
+function debtKey(snapshot: LiabilitySnapshot) {
+  return snapshot.accountId ?? snapshot.account ?? snapshot.name;
+}
+
+function normalizeMatchText(value: string | null | undefined) {
+  return (value ?? '').toLowerCase().replace(/\s+/g, '');
+}
+
+function latestDebtSnapshots(snapshots: LiabilitySnapshot[]) {
+  const byKey = new Map<string, LiabilitySnapshot>();
+  for (const snapshot of [...snapshots].sort((a, b) => b.date.localeCompare(a.date))) {
+    const key = debtKey(snapshot);
+    if (!byKey.has(key)) byKey.set(key, snapshot);
+  }
+  return [...byKey.values()];
+}
+
+function debtMatchesRecurring(item: RecurringExpense, snapshot: LiabilitySnapshot) {
+  const itemTag = recurringTags(item)[0] ?? '';
+  const itemText = normalizeMatchText(
+    `${item.name} ${item.category} ${itemTag} ${recurringPlainNote(item)}`,
+  );
+  const debtName = normalizeMatchText(snapshot.name);
+  const debtText = normalizeMatchText(`${snapshot.name} ${snapshot.account ?? ''} ${snapshot.note ?? ''}`);
+  if (!itemText || !debtText) return false;
+  if (debtName && (itemText.includes(debtName) || debtText.includes(normalizeMatchText(item.name)))) {
+    return true;
+  }
+  const terms = snapshot.name
+    .split(/[\s/、,，()（）-]+/)
+    .map(normalizeMatchText)
+    .filter((term) => term.length >= 2);
+  return terms.some((term) => itemText.includes(term));
+}
+
+function debtSummary(snapshot: LiabilitySnapshot | undefined) {
+  if (!snapshot) return '';
+  const parts = [
+    `負債剩餘 ${formatPlain(snapshot.remainingBalance)}`,
+    snapshot.monthlyPayment ? `月付 ${formatPlain(snapshot.monthlyPayment)}` : '',
+    snapshot.nextDueDate ? `下期 ${monthDay(snapshot.nextDueDate)}` : '',
+  ].filter(Boolean);
+  return parts.join(' · ');
+}
+
+function debtMatchTerms(snapshot: LiabilitySnapshot) {
+  return snapshot.name
+    .split(/[\s/、,，()（）-]+/)
+    .map(normalizeMatchText)
+    .filter((term) => term.length >= 2);
+}
+
+function debtMatchesTransaction(snapshot: LiabilitySnapshot, tx: Transaction) {
+  if (tx.type !== 'expense' || tx.amount <= 0) return false;
+  const haystack = normalizeMatchText(`${tx.note} ${tx.category} ${tx.tags.join(' ')}`);
+  if (!haystack) return false;
+  const name = normalizeMatchText(snapshot.name);
+  if (name && haystack.includes(name)) return true;
+  return debtMatchTerms(snapshot).some((term) => haystack.includes(term));
+}
+
+function debtTransactionHistory(snapshot: LiabilitySnapshot, transactions: Transaction[]) {
+  return transactions
+    .filter((tx) => debtMatchesTransaction(snapshot, tx))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
 export default function FixedCostsPage() {
   const adapter = useAdapter();
   const { dataVersion } = useAppOutletContext();
@@ -51,6 +120,8 @@ export default function FixedCostsPage() {
   const monthKey = now.toISOString().slice(0, 7);
   const [recurring, setRecurring] = useState<RecurringExpense[]>([]);
   const [monthTransactions, setMonthTransactions] = useState<Transaction[]>([]);
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
+  const [debtSnapshots, setDebtSnapshots] = useState<LiabilitySnapshot[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -73,6 +144,18 @@ export default function FixedCostsPage() {
       .listTransactions?.(now.getFullYear(), now.getMonth() + 1)
       .then((rows) => {
         if (!cancelled) setMonthTransactions(rows);
+      })
+      .catch(() => undefined);
+    adapter
+      .listTransactions?.()
+      .then((rows) => {
+        if (!cancelled) setAllTransactions(rows);
+      })
+      .catch(() => undefined);
+    adapter
+      .listDebtSnapshots?.()
+      .then((rows) => {
+        if (!cancelled) setDebtSnapshots(rows);
       })
       .catch(() => undefined);
     return () => {
@@ -101,6 +184,13 @@ export default function FixedCostsPage() {
     );
 
   const monthlyTotal = twdMonthlyEquiv(rows);
+  const reconciledDebts = useMemo(
+    () =>
+      latestDebtSnapshots(
+        debtSnapshots.map((snapshot) => reconcileDebtSnapshot(snapshot, allTransactions, today())),
+      ),
+    [debtSnapshots, allTransactions],
+  );
   /** Monthly-equivalent contributed by non-monthly (yearly/semiannual)
       commitments, shown as the "含年繳月當量" note on the total. */
   const nonMonthlyEquiv = rows.reduce(
@@ -124,10 +214,16 @@ export default function FixedCostsPage() {
   );
 
   const subsTotal = twdMonthlyEquiv(subRows);
+  const debtInstallmentRows = reconciledDebts.filter(
+    (snapshot) =>
+      snapshot.remainingBalance > 0 &&
+      (snapshot.monthlyPayment ?? 0) > 0 &&
+      !installmentRows.some((row) => debtMatchesRecurring(row.item, snapshot)),
+  );
   const installmentTotalMonthly = installmentRows.reduce(
     (sum, row) => sum + (recurringCurrency(row.item) === 'TWD' ? itemChargeAmount(row.item) : 0),
     0,
-  );
+  ) + debtInstallmentRows.reduce((sum, snapshot) => sum + (snapshot.monthlyPayment ?? 0), 0);
   const subDays = new Set(
     subRows.map((row) => row.item.billingDay).filter((day): day is number => Boolean(day)),
   );
@@ -471,6 +567,7 @@ export default function FixedCostsPage() {
       row toggles this open. */
   function renderPanel(item: RecurringExpense, paid: boolean) {
     const payments = recurringPaymentDates(item);
+    const transactionPayments = recurringTransactionHistory(item, allTransactions).slice(0, 6);
     const planHistory = recurringPlanChanges(item);
     return (
       <div className="fc-panel" onClick={(event) => event.stopPropagation()}>
@@ -531,7 +628,7 @@ export default function FixedCostsPage() {
         </div>
 
         <div className="fc-history__head">
-          <span className="micro">繳費紀錄</span>
+          <span className="micro">明細支出紀錄</span>
           <span className="fc-history__add">
             <input
               className="text-input mono fc-history__date"
@@ -549,8 +646,27 @@ export default function FixedCostsPage() {
             </button>
           </span>
         </div>
+        {transactionPayments.length === 0 ? (
+          <span className="caption">尚未在明細中找到相符支出。</span>
+        ) : (
+          transactionPayments.map((tx, index) => (
+            <div key={tx.id} className="fc-history__row">
+              <span className="mono fc-history__date">{tx.date}</span>
+              <span className="caption cell-ellipsis" title={tx.note || tx.category}>
+                {tx.category}
+                {tx.tags[0] ? ` · ${tx.tags[0]}` : ''}
+                {tx.note ? ` · ${tx.note}` : ''}
+              </span>
+              <span className="amount-s">{formatPlain(tx.amount)}</span>
+              {index === 0 && <span className="micro fc-history__latest">最新</span>}
+            </div>
+          ))
+        )}
+        <div className="fc-history__head">
+          <span className="micro">手動繳費紀錄</span>
+        </div>
         {payments.length === 0 ? (
-          <span className="caption">尚無繳費紀錄。</span>
+          <span className="caption">尚無手動繳費紀錄。</span>
         ) : (
           payments.map((date, index) => (
             <div key={`${date}-${index}`} className="fc-history__row">
@@ -602,9 +718,43 @@ export default function FixedCostsPage() {
     );
   }
 
+  function renderDebtPanel(snapshot: LiabilitySnapshot) {
+    const transactionPayments = debtTransactionHistory(snapshot, allTransactions).slice(0, 6);
+    return (
+      <div className="fc-panel" onClick={(event) => event.stopPropagation()}>
+        <div className="fc-history__head">
+          <span className="micro">明細支出紀錄</span>
+          <Link to="/assets" className="btn btn--secondary btn--sm">
+            到資產頁編輯
+          </Link>
+        </div>
+        {transactionPayments.length === 0 ? (
+          <span className="caption">尚未在明細中找到相符分期支出。</span>
+        ) : (
+          transactionPayments.map((tx, index) => (
+            <div key={tx.id} className="fc-history__row">
+              <span className="mono fc-history__date">{tx.date}</span>
+              <span className="caption cell-ellipsis" title={tx.note || tx.category}>
+                {tx.category}
+                {tx.tags[0] ? ` · ${tx.tags[0]}` : ''}
+                {tx.note ? ` · ${tx.note}` : ''}
+              </span>
+              <span className="amount-s">{formatPlain(tx.amount)}</span>
+              {index === 0 && <span className="micro fc-history__latest">最新</span>}
+            </div>
+          ))
+        )}
+      </div>
+    );
+  }
+
   function statusCell(item: RecurringExpense, paid: boolean) {
     if (paid) {
-      const last = recurringPaymentDates(item)[0] ?? item.lastPaid ?? null;
+      const last =
+        recurringTransactionHistory(item, monthTransactions)[0]?.date ??
+        recurringPaymentDates(item)[0] ??
+        item.lastPaid ??
+        null;
       return <span className="fc-c-status fc-status--paid">已扣款 {monthDay(last)}</span>;
     }
     if (isMissingThisMonth(item, monthKey, monthTransactions)) {
@@ -621,6 +771,8 @@ export default function FixedCostsPage() {
     const open = historyOpenId === itemId;
     const currency = recurringCurrency(item) !== 'TWD' ? `${recurringCurrency(item)} ` : '';
     const lastPaid = recurringPaymentDates(item)[0] ?? item.lastPaid ?? null;
+    const matchedDebt = reconciledDebts.find((snapshot) => debtMatchesRecurring(item, snapshot));
+    const matchedDebtSummary = debtSummary(matchedDebt);
     const toggle = () => {
       setHistoryOpenId(open ? null : itemId);
       setNewPayDate(today());
@@ -646,6 +798,7 @@ export default function FixedCostsPage() {
               {item.category}
               {recurringTags(item)[0] ? ` · ${recurringTags(item)[0]}` : ''}
               {fixedDueText(item) ? ` · ${fixedDueText(item)}` : ''}
+              {matchedDebtSummary ? ` · ${matchedDebtSummary}` : ''}
             </span>
           </span>
           {variant === 'std' && (
@@ -680,6 +833,9 @@ export default function FixedCostsPage() {
     const currency = recurringCurrency(item) !== 'TWD' ? `${recurringCurrency(item)} ` : '';
     const total = installmentTotal(item);
     const remaining = installmentRemaining(item);
+    const matchedDebt = reconciledDebts.find((snapshot) => debtMatchesRecurring(item, snapshot));
+    const matchedDebtSummary = debtSummary(matchedDebt);
+    const displayAmount = matchedDebt?.monthlyPayment ?? itemChargeAmount(item);
     const toggle = () => {
       setHistoryOpenId(open ? null : itemId);
       setNewPayDate(today());
@@ -704,24 +860,72 @@ export default function FixedCostsPage() {
               {' '}
               {item.category}
               {recurringTags(item)[0] ? ` · ${recurringTags(item)[0]}` : ''}
+              {matchedDebtSummary ? ` · ${matchedDebtSummary}` : ''}
             </span>
           </span>
           <span className="fc-c-remain">
             <span className="fc-c-lbl">剩餘 </span>
-            {remaining != null ? remaining : '—'}
-            <span className="tx-muted"> / {total} 期</span>
+            {matchedDebt ? formatPlain(matchedDebt.remainingBalance) : remaining != null ? remaining : '—'}
+            {!matchedDebt && <span className="tx-muted"> / {total} 期</span>}
           </span>
           <span className="fc-c-monthly amount-s">
             <span className="fc-c-lbl">月付 </span>
             {currency}
-            {formatPlain(itemChargeAmount(item))}
+            {formatPlain(displayAmount)}
           </span>
           <span className="fc-c-next micro tx-muted">
             <span className="fc-c-lbl">下次扣款 </span>
-            {monthDay(item.nextDue ?? null)}
+            {monthDay(matchedDebt?.nextDueDate ?? item.nextDue ?? null)}
           </span>
         </div>
         {open && renderPanel(item, paid)}
+      </div>
+    );
+  }
+
+  function renderDebtInstallmentRow(snapshot: LiabilitySnapshot) {
+    const itemId = `debt-${snapshot.id}`;
+    const open = historyOpenId === itemId;
+    const lastPayment = debtTransactionHistory(snapshot, allTransactions)[0]?.date ?? null;
+    const toggle = () => {
+      setHistoryOpenId(open ? null : itemId);
+    };
+    return (
+      <div key={itemId} className="fc-item">
+        <div
+          className={`fc-row fc-row--inst${open ? ' fc-row--open' : ''}`}
+          role="button"
+          tabIndex={0}
+          onClick={toggle}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              toggle();
+            }
+          }}
+        >
+          <span className="fc-c-name cell-ellipsis" title={snapshot.name}>
+            {snapshot.name}
+            <span className="micro dashboard__fixed-meta">
+              {' '}
+              資產負債
+              {lastPayment ? ` · 最近支出 ${monthDay(lastPayment)}` : ''}
+            </span>
+          </span>
+          <span className="fc-c-remain">
+            <span className="fc-c-lbl">剩餘 </span>
+            {formatPlain(snapshot.remainingBalance)}
+          </span>
+          <span className="fc-c-monthly amount-s">
+            <span className="fc-c-lbl">月付 </span>
+            {formatPlain(snapshot.monthlyPayment ?? 0)}
+          </span>
+          <span className="fc-c-next micro tx-muted">
+            <span className="fc-c-lbl">下次扣款 </span>
+            {monthDay(snapshot.nextDueDate ?? null)}
+          </span>
+        </div>
+        {open && renderDebtPanel(snapshot)}
       </div>
     );
   }
@@ -880,19 +1084,20 @@ export default function FixedCostsPage() {
                     月付合計 {formatPlain(installmentTotalMonthly)}
                   </span>
                 </div>
-                {installmentRows.length > 0 ? (
+                {installmentRows.length > 0 || debtInstallmentRows.length > 0 ? (
                   <>
                     <div className="fc-sec">
                       {renderSectionHead('inst')}
                       {installmentRows.map((row) => renderInstallmentRow(row))}
+                      {debtInstallmentRows.map((snapshot) => renderDebtInstallmentRow(snapshot))}
                     </div>
                     <div className="micro fc-group-note" style={{ marginTop: 8 }}>
-                      剩餘期數＝分期期數扣除已記錄繳費筆數；本金入資產頁負債，此處僅追蹤月付現金流。
+                      分期優先讀取資產頁負債；支出紀錄由明細交易自動核對。
                     </div>
                   </>
                 ) : (
                   <span className="caption dashboard__fixed-empty">
-                    尚無分期項目。編輯項目並填入「分期期數」即可加入（例：機車、筆電分期）。
+                    尚無分期項目。可先在資產頁新增負債，填入總金額、期數與起始日。
                   </span>
                 )}
               </section>
