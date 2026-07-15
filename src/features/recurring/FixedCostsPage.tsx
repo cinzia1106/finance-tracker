@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAdapter } from '../../data/AdapterContext';
 import { tagsForCategory } from '../../data/categoryDefinitions';
 import { useAppOutletContext } from '../../layout/AppLayout';
-import { formatPlain } from '../../lib/format';
+import { formatCurrency, formatPlain } from '../../lib/format';
 import type { RecurringExpense, Transaction } from '../../types/models';
 import {
   CURRENCY_OPTIONS,
@@ -16,12 +16,14 @@ import {
   emptyFixedItemForm,
   fixedDueText,
   fixedItemToForm,
+  isMissingThisMonth,
   isPaidThisMonth,
   itemAmount,
   itemChargeAmount,
   monthlyEquivalent,
   noteWithAddedPayment,
   noteWithRecurringMeta,
+  noteWithSkip,
   recurringCurrency,
   recurringPaymentDates,
   recurringPlainNote,
@@ -87,7 +89,59 @@ export default function FixedCostsPage() {
     (sum, row) => sum + (recurringCurrency(row.item) === 'TWD' ? itemAmount(row.item) : 0),
     0,
   );
-  const paidCount = rows.filter((row) => row.paid).length;
+  /** Monthly-equivalent contributed by non-monthly (yearly/semiannual)
+      commitments, shown as the "含年繳月當量" note on the total. */
+  const nonMonthlyEquiv = rows.reduce(
+    (sum, row) =>
+      row.item.cycle !== 'monthly' && recurringCurrency(row.item) === 'TWD'
+        ? sum + itemAmount(row.item)
+        : sum,
+    0,
+  );
+
+  /** 20-day digital-subscription group. */
+  const sub20 = rows.filter((row) => row.item.billingDay === 20);
+  const sub20Total = sub20.reduce((sum, row) => sum + itemChargeAmount(row.item), 0);
+
+  /** Missing-this-month monthly commitments. */
+  const missing = rows.filter((row) =>
+    isMissingThisMonth(row.item, monthKey, monthTransactions),
+  );
+
+  /** Everything except the 20-day group, grouped by category with a
+      monthly-equivalent subtotal (matches the design's section tables). */
+  const categoryGroups = useMemo(() => {
+    const groups = new Map<string, typeof rows>();
+    for (const row of rows) {
+      if (row.item.billingDay === 20) continue;
+      const key = row.item.category || '其他固定承諾';
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    return [...groups.entries()].map(([category, list]) => ({
+      category,
+      list,
+      subtotal: list.reduce(
+        (sum, row) => sum + (recurringCurrency(row.item) === 'TWD' ? itemAmount(row.item) : 0),
+        0,
+      ),
+    }));
+  }, [rows, monthKey]);
+
+  async function skipThisMonth(item: RecurringExpense) {
+    if (!adapter.updateRecurringItem || !item.id) return;
+    setBusyId(item.id);
+    setError(null);
+    try {
+      const updated = await adapter.updateRecurringItem(item.id, {
+        note: noteWithSkip(item, monthKey),
+      });
+      setRecurring((previous) => previous.map((row) => (row.id === item.id ? updated : row)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新失敗，請稍後再試。');
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function addItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -380,54 +434,13 @@ export default function FixedCostsPage() {
     );
   }
 
-  return (
-    <>
-      <header className="page-header">
-        <div className="page-header__lead">
-          <Link to="/" className="back-header__btn mobile-only" aria-label="返回總覽">
-            ‹
-          </Link>
-          <h1 className="h1">固定支出</h1>
-          {rows.length > 0 && (
-            <span className="caption">
-              本月已繳 {paidCount}/{rows.length} · 月承諾 {formatPlain(monthlyTotal)}
-            </span>
-          )}
-        </div>
-        <button
-          type="button"
-          className="btn btn--primary"
-          onClick={() => setShowAdd((value) => !value)}
-        >
-          {showAdd ? '收起' : '＋ 新增項目'}
-        </button>
-      </header>
-
-      {error && <div className="caption dashboard__fixed-error">{error}</div>}
-
-      <div className="grid-12">
-        {showAdd && (
-          <section className="card span-12">
-            <h2 className="h2">新增固定支出</h2>
-            <form onSubmit={(event) => void addItem(event)} className="form-grid">
-              {renderForm(addForm, setAddForm, '新增', busyId === 'new')}
-            </form>
-          </section>
-        )}
-
-        <section className="card span-12">
-          {rows.length === 0 && !showAdd ? (
-            <span className="caption dashboard__fixed-empty">
-              尚未建立固定支出。可新增軟體方案、分期、年繳或其他固定繳費項目。
-            </span>
-          ) : (
-            <div className="dashboard__fixed-list">
-              {rows.map(({ item, paid }) => {
-                const itemId = item.id ?? item.name;
-                const payments = recurringPaymentDates(item);
-                const planHistory = recurringPlanChanges(item);
-                const historyOpen = historyOpenId === itemId;
-                return (
+  function renderRow(row: { item: RecurringExpense; paid: boolean }) {
+    const { item, paid } = row;
+    const itemId = item.id ?? item.name;
+    const payments = recurringPaymentDates(item);
+    const planHistory = recurringPlanChanges(item);
+    const historyOpen = historyOpenId === itemId;
+    return (
                   <div key={itemId} className="dashboard__fixed-row">
                     <span className="dashboard__fixed-name cell-ellipsis" title={item.name}>
                       {item.name}
@@ -594,16 +607,139 @@ export default function FixedCostsPage() {
                       </form>
                     )}
                   </div>
-                );
-              })}
-            </div>
+    );
+  }
+
+  return (
+    <>
+      <header className="page-header">
+        <div className="page-header__lead">
+          <Link to="/" className="back-header__btn mobile-only" aria-label="返回總覽">
+            ‹
+          </Link>
+          <h1 className="h1">固定支出</h1>
+          <span className="caption fc-subtitle desktop-only">
+            年繳／半年繳以月當量計入承諾 · {now.getFullYear()}年{now.getMonth() + 1}月
+          </span>
+        </div>
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={() => setShowAdd((value) => !value)}
+        >
+          {showAdd ? '收起' : '＋ 新增固定支出'}
+        </button>
+      </header>
+
+      {error && <div className="caption dashboard__fixed-error">{error}</div>}
+
+      <div className="grid-12">
+        {/* Stat cards */}
+        <section className="card span-4">
+          <div className="stat__label">每月承諾合計</div>
+          <div className="stat__value fc-stat">{formatCurrency(monthlyTotal)}</div>
+          {nonMonthlyEquiv > 0 && (
+            <div className="caption">含年繳／半年繳月當量 {formatPlain(nonMonthlyEquiv)}</div>
           )}
         </section>
+        <section className="card span-4">
+          <div className="stat__label">20 日訂閱群組</div>
+          <div className="stat__value fc-stat">
+            {formatPlain(sub20Total)} <span className="fc-stat-sub">· {sub20.length} 筆</span>
+          </div>
+          <div className="caption">統一扣款日 每月 20 日</div>
+        </section>
+        <section
+          className={`card span-4${missing.length > 0 ? ' fc-alert-card' : ''}`}
+        >
+          <div className="stat__label">偵測提醒</div>
+          <div className={`stat__value fc-stat${missing.length > 0 ? ' liability' : ''}`}>
+            {missing.length} 件
+          </div>
+          <div className="caption">
+            {missing.length > 0 ? `${missing.length} 筆本月尚未扣款` : '本月固定支出無異常'}
+          </div>
+        </section>
+
+        {/* 缺漏 alert banners */}
+        {missing.map(({ item }) => (
+          <div key={`miss-${item.id}`} className="card span-12 fc-banner">
+            <span className="fc-banner__dot" />
+            <span className="caption fc-banner__text">
+              <strong>缺漏</strong> — {item.name} {formatPlain(itemChargeAmount(item))}
+              {item.billingDay ? ` 通常於每月 ${item.billingDay} 日扣款，` : ' '}本月尚未出現對應交易。
+            </span>
+            <span className="fc-banner__actions">
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                disabled={busyId === item.id}
+                onClick={() => void recordPayment(item, today())}
+              >
+                已手動繳款，補記
+              </button>
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                disabled={busyId === item.id}
+                onClick={() => void skipThisMonth(item)}
+              >
+                本月暫停
+              </button>
+            </span>
+          </div>
+        ))}
+
+        {showAdd && (
+          <section className="card span-12">
+            <h2 className="h2">新增固定支出</h2>
+            <form onSubmit={(event) => void addItem(event)} className="form-grid">
+              {renderForm(addForm, setAddForm, '新增', busyId === 'new')}
+            </form>
+          </section>
+        )}
+
+        {rows.length === 0 && !showAdd ? (
+          <section className="card span-12">
+            <span className="caption dashboard__fixed-empty">
+              尚未建立固定支出。可新增軟體方案、分期、年繳或其他固定繳費項目。
+            </span>
+          </section>
+        ) : (
+          <>
+            {/* 數位訂閱 · 20日群組 */}
+            {sub20.length > 0 && (
+              <section className="card span-12">
+                <div className="card__header">
+                  <h2 className="h2">數位訂閱 · 20 日群組</h2>
+                  <span className="micro fc-group-note">
+                    合計 {formatPlain(sub20Total)} · 每月 20 日扣款
+                  </span>
+                </div>
+                <div className="dashboard__fixed-list">{sub20.map(renderRow)}</div>
+              </section>
+            )}
+
+            {/* Category groups */}
+            {categoryGroups.map((group) => (
+              <section key={group.category} className="card span-12">
+                <div className="card__header">
+                  <h2 className="h2">{group.category}</h2>
+                  <span className="micro fc-group-note">
+                    月承諾 {formatPlain(group.subtotal)}
+                  </span>
+                </div>
+                <div className="dashboard__fixed-list">{group.list.map(renderRow)}</div>
+              </section>
+            ))}
+          </>
+        )}
 
         <section className="card span-12">
           <div className="caption" style={{ lineHeight: 1.7 }}>
-            規則：下次扣款日自動推算——月繳依扣款日、年繳／半年繳依最後繳費日加一個週期，
-            不需手動輸入。點「紀錄」可查看與修改每筆繳費日期；方案金額或週期改變時會自動留下調整紀錄。
+            規則：年繳／半年繳以月當量計入每月承諾；billingDay 為 20 的項目歸「數位訂閱」群組。
+            下次扣款日自動推算——月繳依扣款日、年繳／半年繳依最後繳費日加一個週期。
+            缺漏＝月繳項目已過扣款日仍未出現對應交易；「補記」記錄一筆繳費、「本月暫停」略過本月偵測。
           </div>
         </section>
       </div>

@@ -230,6 +230,57 @@
   padding-top: 8px;
   line-height: 1.6;
 }
+
+/* Fixed costs page — stat cards, alert banners, group headers */
+.fc-subtitle {
+  letter-spacing: 0;
+}
+.fc-stat {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+}
+.fc-stat-sub {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-ink-60);
+}
+.fc-alert-card {
+  background: var(--color-apricot-tint);
+  border-color: var(--color-apricot-border);
+}
+.fc-group-note {
+  letter-spacing: 0;
+}
+.fc-banner {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--color-apricot-tint);
+  border-color: var(--color-apricot-border);
+  padding: 12px 16px;
+}
+.fc-banner__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-dot-orange);
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.fc-banner__text {
+  flex: 1 1 240px;
+  min-width: 0;
+  color: var(--color-apricot-deep);
+  line-height: 1.6;
+}
+.fc-banner__actions {
+  display: inline-flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
 .dashboard__fixed-allpaid {
   color: var(--color-mint-deep);
   font-weight: 500;

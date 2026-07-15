@@ -148,6 +148,7 @@ function stripRecurringMarkers(note: string | undefined) {
       .replace(RECURRING_CURRENCY_RE, '')
       .replace(RECURRING_PAYMENTS_RE, '')
       .replace(RECURRING_PLANS_RE, '')
+      .replace(/\[skip:[^\]]*\]/gi, '')
       .trim() ?? ''
   );
 }
@@ -249,4 +250,38 @@ export function isPaidThisMonth(
     recurringPaymentDates(item).some((date) => date.startsWith(monthKey)) ||
     recurringPaidByTransaction(item, monthTransactions)
   );
+}
+
+const RECURRING_SKIP_RE = /\[skip:([^\]]*)\]/i;
+
+export function skippedMonths(item: RecurringExpense) {
+  return splitMarker(item.note, RECURRING_SKIP_RE);
+}
+
+export function isSkippedThisMonth(item: RecurringExpense, monthKey: string) {
+  return skippedMonths(item).includes(monthKey);
+}
+
+export function noteWithSkip(item: RecurringExpense, monthKey: string) {
+  const cleaned = item.note?.replace(RECURRING_SKIP_RE, '').trim() ?? '';
+  const months = [...new Set([...skippedMonths(item), monthKey])];
+  const marker = months.length ? `[skip:${months.join(',')}]` : '';
+  return [cleaned, marker].filter(Boolean).join(' ');
+}
+
+/** An active monthly commitment that this month is unpaid, not skipped,
+    and already past its billing day → flagged as 缺漏 (missing). */
+export function isMissingThisMonth(
+  item: RecurringExpense,
+  monthKey: string,
+  monthTransactions: Transaction[],
+  todayDate: string = new Date().toISOString().slice(0, 10),
+) {
+  if (item.active === false) return false;
+  if (item.cycle !== 'monthly') return false;
+  if (isSkippedThisMonth(item, monthKey)) return false;
+  if (isPaidThisMonth(item, monthKey, monthTransactions)) return false;
+  const dayOfMonth = Number(todayDate.slice(8, 10));
+  if (item.billingDay && dayOfMonth < item.billingDay) return false;
+  return true;
 }
