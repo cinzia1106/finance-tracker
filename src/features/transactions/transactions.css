@@ -335,4 +335,25 @@
     max-width: none;
     width: 100%;
   }
+  /* Keep the amount intact on the right; let the note/meta column shrink
+     and truncate so long notes never push the amount off-screen. */
+  .tx-mobile-row {
+    align-items: flex-start;
+  }
+  .tx-mobile-main {
+    flex: 1 1 0;
+  }
+  .tx-mobile-row > .amount-s {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    text-align: right;
+    padding-top: 1px;
+  }
+  .tx-mobile-meta {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .tx-tags {
+    max-width: 100%;
+  }
 }
