@@ -30,6 +30,7 @@ export interface FixedItemForm {
   tag: string;
   billingDay: string;
   nextDue: string;
+  installment: string;
   note: string;
 }
 
@@ -43,6 +44,7 @@ export function emptyFixedItemForm(): FixedItemForm {
     tag: '',
     billingDay: '',
     nextDue: '',
+    installment: '',
     note: '',
   };
 }
@@ -141,6 +143,26 @@ export function recurringPlanChanges(item: RecurringExpense) {
   return splitMarker(item.note, RECURRING_PLANS_RE).sort((a, b) => b.localeCompare(a));
 }
 
+const RECURRING_INSTALLMENT_RE = /\[installment:(\d+)\]/i;
+
+/** Total number of installment periods, embedded as [installment:N].
+    Remaining periods derive from N minus the recorded payment count, so no
+    schema change is needed — it rides the note like the other markers. */
+export function installmentTotal(item: RecurringExpense): number | null {
+  const match = item.note?.match(RECURRING_INSTALLMENT_RE);
+  return match ? Number(match[1]) : null;
+}
+
+export function isInstallment(item: RecurringExpense) {
+  return installmentTotal(item) != null;
+}
+
+export function installmentRemaining(item: RecurringExpense): number | null {
+  const total = installmentTotal(item);
+  if (total == null) return null;
+  return Math.max(0, total - recurringPaymentDates(item).length);
+}
+
 function stripRecurringMarkers(note: string | undefined) {
   return (
     note
@@ -148,6 +170,7 @@ function stripRecurringMarkers(note: string | undefined) {
       .replace(RECURRING_CURRENCY_RE, '')
       .replace(RECURRING_PAYMENTS_RE, '')
       .replace(RECURRING_PLANS_RE, '')
+      .replace(RECURRING_INSTALLMENT_RE, '')
       .replace(/\[skip:[^\]]*\]/gi, '')
       .trim() ?? ''
   );
@@ -167,13 +190,18 @@ export function noteWithRecurringMeta(
   currency: string,
   payments: string[] = [],
   plans: string[] = [],
+  installment: number | null = null,
 ) {
   const cleanNote = stripRecurringMarkers(note);
   const tagMarker = tag ? `[tags:${tag}]` : '';
   const currencyMarker = currency && currency !== 'TWD' ? `[currency:${currency}]` : '';
   const paymentMarker = payments.length > 0 ? `[payments:${[...new Set(payments)].join(',')}]` : '';
   const planMarker = plans.length > 0 ? `[plans:${[...new Set(plans)].join(',')}]` : '';
-  return [cleanNote, tagMarker, currencyMarker, paymentMarker, planMarker].filter(Boolean).join(' ');
+  const installmentMarker =
+    installment != null && installment > 0 ? `[installment:${installment}]` : '';
+  return [cleanNote, tagMarker, currencyMarker, paymentMarker, planMarker, installmentMarker]
+    .filter(Boolean)
+    .join(' ');
 }
 
 export function noteWithAddedPayment(item: RecurringExpense, paidDate: string) {
@@ -183,6 +211,7 @@ export function noteWithAddedPayment(item: RecurringExpense, paidDate: string) {
     recurringCurrency(item),
     [paidDate, ...recurringPaymentDates(item)],
     recurringPlanChanges(item),
+    installmentTotal(item),
   );
 }
 
@@ -201,6 +230,7 @@ export function noteWithAddedPlanChange(
     recurringCurrency(item),
     recurringPaymentDates(item),
     [entry, ...recurringPlanChanges(item)],
+    installmentTotal(item),
   );
 }
 
@@ -214,6 +244,7 @@ export function fixedItemToForm(item: RecurringExpense): FixedItemForm {
     tag: recurringTags(item)[0] ?? '',
     billingDay: item.billingDay ? String(item.billingDay) : '',
     nextDue: item.nextDue ?? '',
+    installment: installmentTotal(item) != null ? String(installmentTotal(item)) : '',
     note: recurringPlainNote(item),
   };
 }

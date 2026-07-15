@@ -290,6 +290,127 @@
   grid-template-columns: minmax(0, 1fr) 96px auto;
 }
 
+/* Fixed-costs page — semantic section tables (health / installment /
+   subscription / other). Each row is its own grid so the expandable
+   history panel can span every column via grid-column: 1 / -1. */
+.fc-sec {
+  display: flex;
+  flex-direction: column;
+}
+.fc-row {
+  display: grid;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 0;
+  border-bottom: var(--border-hairline-soft);
+  font-size: 13px;
+}
+.fc-row:last-child {
+  border-bottom: none;
+}
+.fc-row--head {
+  padding: 0 0 6px 0;
+  border-bottom: var(--border-hairline);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-40);
+}
+.fc-row--std {
+  grid-template-columns: minmax(0, 1fr) 110px auto;
+  grid-template-areas: 'name amount actions';
+}
+.fc-row--sub {
+  grid-template-columns: minmax(0, 1fr) 100px 96px auto;
+  grid-template-areas: 'name amount last actions';
+}
+.fc-row--inst {
+  grid-template-columns: minmax(0, 1fr) 72px 96px 96px auto;
+  grid-template-areas: 'name remain monthly next actions';
+}
+.fc-c-name {
+  grid-area: name;
+  min-width: 0;
+}
+.fc-c-amount {
+  grid-area: amount;
+  text-align: right;
+  white-space: nowrap;
+}
+.fc-c-last {
+  grid-area: last;
+  white-space: nowrap;
+}
+.fc-c-remain {
+  grid-area: remain;
+  white-space: nowrap;
+}
+.fc-c-monthly {
+  grid-area: monthly;
+  text-align: right;
+  white-space: nowrap;
+}
+.fc-c-next {
+  grid-area: next;
+  white-space: nowrap;
+}
+.fc-c-actions {
+  grid-area: actions;
+  justify-self: end;
+}
+.fc-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+/* Inline field labels — hidden on desktop (the header row names columns),
+   shown on mobile where each row reflows and the header is dropped. */
+.fc-c-lbl {
+  display: none;
+  color: var(--color-ink-40);
+}
+
+@media (max-width: 959px) {
+  .fc-row--head {
+    display: none;
+  }
+  .fc-c-lbl {
+    display: inline;
+  }
+  .fc-row--std {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name amount'
+      'actions actions';
+  }
+  .fc-row--sub {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name amount'
+      'last last'
+      'actions actions';
+  }
+  .fc-row--inst {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      'name name'
+      'remain monthly'
+      'next next'
+      'actions actions';
+  }
+  .fc-c-amount,
+  .fc-c-monthly {
+    text-align: left;
+  }
+  .fc-c-actions {
+    justify-self: start;
+  }
+  .fc-actions {
+    justify-content: flex-start;
+  }
+}
+
 .dashboard__card-link {
   font-weight: 500;
   color: var(--color-mint-deep);
